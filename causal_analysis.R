@@ -470,17 +470,14 @@ if (nrow(arcs_bn) > 0) {
   }
 }
 
-# Plot the Bayesian network with larger text
+# Plot the Bayesian network with larger PDF size
 pdf("causal_graph_bayesian_network.pdf", width = 14, height = 12)
 # Highlight the target variable
 node_attrs <- list()
 if (target_variable %in% nodes(bn_structure)) {
   node_attrs[[target_variable]] <- list(fillcolor = "lightblue", style = "filled")
 }
-graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variable),
-              attrs = list(graph = list(fontsize = 20),
-                          node = list(fontsize = 16),
-                          edge = list(fontsize = 14)))
+graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variable))
 dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
@@ -543,13 +540,10 @@ if (target_variable %in% nodes(bn_structure)) {
         subgraph <- empty.graph(relevant_nodes)
         arcs(subgraph) <- relevant_arcs
         
-        # Plot focused DAG with larger text
+        # Plot focused DAG with larger PDF size
         pdf("causal_dag_target_focused.pdf", width = 12, height = 10)
         graphviz.plot(subgraph, 
-                     main = paste("Focused DAG: Direct Causes and Effects of", target_variable),
-                     attrs = list(graph = list(fontsize = 20),
-                                 node = list(fontsize = 16),
-                                 edge = list(fontsize = 14)))
+                     main = paste("Focused DAG: Direct Causes and Effects of", target_variable))
         dev.off()
         cat("Focused DAG saved to: causal_dag_target_focused.pdf\n")
       }
@@ -606,13 +600,10 @@ if (nrow(strong_arcs) > 0) {
   cat("\nNo strong causal relationships found with current thresholds\n")
 }
 
-# Plot arc strength with larger text
+# Plot arc strength with larger PDF size
 pdf("arc_strength_plot.pdf", width = 14, height = 12)
 strength.plot(bn_structure, boot_strength, shape = "ellipse",
-              main = "Arc Strength - Causal Relationships",
-              attrs = list(graph = list(fontsize = 20),
-                          node = list(fontsize = 16),
-                          edge = list(fontsize = 14)))
+              main = "Arc Strength - Causal Relationships")
 dev.off()
 cat("\nArc strength plot saved to: arc_strength_plot.pdf\n")
 
