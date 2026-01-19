@@ -1,0 +1,29 @@
+# R related files
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
+
+# Output files from causal analysis
+causal_graph_*.pdf
+arc_strength_plot.pdf
+strong_causal_relationships.csv
+causal_analysis_results.RData
+
+# Data files (keep only example generator, not actual data)
+bdporc_dataC2.RData
+
+# Temporary files
+*.tmp
+*.log
+.Rapp.history
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python files
+__pycache__/
+*.pyc
+.venv/
+venv/
