@@ -94,8 +94,12 @@ The script will generate several output files:
 
 ### 2. Bayesian Network Learning
 - Uses Hill-Climbing algorithm with BIC scoring
-- Handles mixed data types (continuous and discrete)
+- Automatically selects appropriate scoring function based on data types:
+  - **bic-cg** (Conditional Gaussian): For mixed continuous and discrete variables
+  - **bic-g** (Gaussian): For continuous-only variables
+  - **bic** (Discrete): For discrete-only variables
 - Learns directed acyclic graph (DAG) structure
+- Handles mixed data types seamlessly
 
 ### 3. Bootstrap Analysis
 - Assesses reliability of identified relationships

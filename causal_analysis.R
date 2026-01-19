@@ -346,7 +346,8 @@ if (length(continuous_vars) >= 2) {
 cat("\n\n=== Causal Discovery using bnlearn (Mixed Data) ===\n")
 
 # bnlearn can handle mixed continuous and discrete data
-# Use hill-climbing algorithm with BIC score
+# For mixed data, we use conditional Gaussian Bayesian Networks (CG-BN)
+# which allows both continuous and discrete variables
 
 # Prepare data for bnlearn
 # Convert all discrete/factor variables properly
@@ -361,12 +362,30 @@ for (var in names(bnlearn_data)) {
   }
 }
 
-cat("\nRunning Hill-Climbing algorithm with BIC score...\n")
+cat("\nRunning Hill-Climbing algorithm with appropriate BIC score...\n")
 cat("Number of observations:", nrow(bnlearn_data), "\n")
 cat("Number of variables:", ncol(bnlearn_data), "\n")
 
-# Learn the structure using hill-climbing
-bn_structure <- hc(bnlearn_data, score = "bic-g")
+# Determine if we have mixed data (both continuous and discrete)
+has_continuous <- any(sapply(bnlearn_data, is.numeric))
+has_discrete <- any(sapply(bnlearn_data, is.factor))
+
+if (has_continuous && has_discrete) {
+  cat("Data type: Mixed (continuous and discrete variables)\n")
+  cat("Using conditional Gaussian BN with bic-cg score\n\n")
+  # For mixed continuous-discrete data, use bic-cg (conditional Gaussian)
+  bn_structure <- hc(bnlearn_data, score = "bic-cg")
+} else if (has_continuous) {
+  cat("Data type: Continuous only\n")
+  cat("Using Gaussian BN with bic-g score\n\n")
+  # For continuous-only data, use bic-g (Gaussian)
+  bn_structure <- hc(bnlearn_data, score = "bic-g")
+} else {
+  cat("Data type: Discrete only\n")
+  cat("Using discrete BN with bic score\n\n")
+  # For discrete-only data, use bic (discrete)
+  bn_structure <- hc(bnlearn_data, score = "bic")
+}
 
 cat("\n=== Bayesian Network Structure ===\n")
 print(bn_structure)
@@ -423,8 +442,14 @@ graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variabl
 dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
-# Calculate network score
-bn_score <- score(bn_structure, bnlearn_data, type = "bic-g")
+# Calculate network score using the same score type as structure learning
+if (has_continuous && has_discrete) {
+  bn_score <- score(bn_structure, bnlearn_data, type = "bic-cg")
+} else if (has_continuous) {
+  bn_score <- score(bn_structure, bnlearn_data, type = "bic-g")
+} else {
+  bn_score <- score(bn_structure, bnlearn_data, type = "bic")
+}
 cat("\nBIC Score:", bn_score, "\n")
 
 ################################################################################
@@ -503,8 +528,21 @@ cat("\n\n=== Assessing Strength of Causal Relationships ===\n")
 
 # Bootstrap to assess arc strength
 cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n")
-boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                               algorithm.args = list(score = "bic-g"))
+
+# Use the same score as determined earlier for consistency
+if (has_continuous && has_discrete) {
+  cat("Using bic-cg score for mixed data\n")
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = "bic-cg"))
+} else if (has_continuous) {
+  cat("Using bic-g score for continuous data\n")
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = "bic-g"))
+} else {
+  cat("Using bic score for discrete data\n")
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = "bic"))
+}
 
 # Filter strong arcs (strength > 0.5, direction > 0.5)
 strong_arcs <- boot_strength[boot_strength$strength > 0.5 & boot_strength$direction > 0.5, ]

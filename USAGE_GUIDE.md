@@ -254,7 +254,10 @@ The script uses Hill-Climbing by default. Try others:
 
 **Tabu search** (often better, slower):
 ```r
-bn_structure <- tabu(bnlearn_data, score = "bic-g")
+# Use appropriate score based on your data type
+bn_structure <- tabu(bnlearn_data, score = "bic-cg")  # for mixed data
+# or score = "bic-g" for continuous only
+# or score = "bic" for discrete only
 ```
 
 **Greedy search** (faster, may miss optimal solution):
@@ -273,7 +276,8 @@ blacklist <- data.frame(
   to = c("sow_age_first_mating", "sow_age_first_mating")
 )
 
-bn_structure <- hc(bnlearn_data, score = "bic-g", blacklist = blacklist)
+# Use appropriate score based on your data type
+bn_structure <- hc(bnlearn_data, score = "bic-cg", blacklist = blacklist)
 ```
 
 ### Extracting Specific Information
