@@ -325,9 +325,11 @@ if (length(continuous_vars) >= 2) {
   cat("\nAdjacency Matrix:\n")
   print(adj_matrix)
   
-  # Save the graph
-  pdf("causal_graph_continuous.pdf", width = 10, height = 8)
-  plot(pc_result, main = "Causal Graph - Continuous Variables (PC Algorithm)")
+  # Save the graph with larger text size for readability
+  pdf("causal_graph_continuous.pdf", width = 12, height = 10)
+  # Increase text size: cex controls overall size, cex.main for title, cex.axis for axis labels
+  plot(pc_result, main = "Causal Graph - Continuous Variables (PC Algorithm)", 
+       cex = 1.5, cex.main = 1.8)
   dev.off()
   cat("\nCausal graph saved to: causal_graph_continuous.pdf\n")
   
@@ -468,14 +470,17 @@ if (nrow(arcs_bn) > 0) {
   }
 }
 
-# Plot the Bayesian network
-pdf("causal_graph_bayesian_network.pdf", width = 12, height = 10)
+# Plot the Bayesian network with larger text
+pdf("causal_graph_bayesian_network.pdf", width = 14, height = 12)
 # Highlight the target variable
 node_attrs <- list()
 if (target_variable %in% nodes(bn_structure)) {
   node_attrs[[target_variable]] <- list(fillcolor = "lightblue", style = "filled")
 }
-graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variable))
+graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variable),
+              attrs = list(graph = list(fontsize = 20),
+                          node = list(fontsize = 16),
+                          edge = list(fontsize = 14)))
 dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
@@ -538,10 +543,13 @@ if (target_variable %in% nodes(bn_structure)) {
         subgraph <- empty.graph(relevant_nodes)
         arcs(subgraph) <- relevant_arcs
         
-        # Plot focused DAG
-        pdf("causal_dag_target_focused.pdf", width = 10, height = 8)
+        # Plot focused DAG with larger text
+        pdf("causal_dag_target_focused.pdf", width = 12, height = 10)
         graphviz.plot(subgraph, 
-                     main = paste("Focused DAG: Direct Causes and Effects of", target_variable))
+                     main = paste("Focused DAG: Direct Causes and Effects of", target_variable),
+                     attrs = list(graph = list(fontsize = 20),
+                                 node = list(fontsize = 16),
+                                 edge = list(fontsize = 14)))
         dev.off()
         cat("Focused DAG saved to: causal_dag_target_focused.pdf\n")
       }
@@ -598,10 +606,13 @@ if (nrow(strong_arcs) > 0) {
   cat("\nNo strong causal relationships found with current thresholds\n")
 }
 
-# Plot arc strength
-pdf("arc_strength_plot.pdf", width = 12, height = 10)
+# Plot arc strength with larger text
+pdf("arc_strength_plot.pdf", width = 14, height = 12)
 strength.plot(bn_structure, boot_strength, shape = "ellipse",
-              main = "Arc Strength - Causal Relationships")
+              main = "Arc Strength - Causal Relationships",
+              attrs = list(graph = list(fontsize = 20),
+                          node = list(fontsize = 16),
+                          edge = list(fontsize = 14)))
 dev.off()
 cat("\nArc strength plot saved to: arc_strength_plot.pdf\n")
 
