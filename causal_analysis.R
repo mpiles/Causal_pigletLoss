@@ -152,11 +152,13 @@ cat("\nChecking variable availability:\n")
 # Try to match variables (case-insensitive)
 matched_vars <- character()
 missing_vars <- character()
+var_name_map <- list()  # Map from original to matched names
 
 for (var in variable_list) {
   # Try exact match first
   if (var %in% available_vars) {
     matched_vars <- c(matched_vars, var)
+    var_name_map[[var]] <- var
     cat("  ✓", var, "- found\n")
   } else {
     # Try case-insensitive match
@@ -164,6 +166,7 @@ for (var in variable_list) {
     if (length(match_idx) > 0) {
       matched_var <- available_vars[match_idx[1]]
       matched_vars <- c(matched_vars, matched_var)
+      var_name_map[[var]] <- matched_var
       cat("  ✓", var, "- found as", matched_var, "\n")
     } else {
       missing_vars <- c(missing_vars, var)
@@ -198,24 +201,40 @@ cat("Final dataset:", nrow(analysis_data), "rows\n")
 # Separate continuous and discrete variables
 # Use the target_variable defined earlier (don't duplicate)
 
+# Get the actual matched names for each variable category
+# This handles case differences (e.g., Company_farm vs company_farm)
+
 # Continuous predictor variables (for PC algorithm)
-continuous_vars <- c(
+continuous_vars_orig <- c(
   target_variable,                     # TARGET: Lactation losses over born alive
   "avg.sows", "prev_sowlactpd", "Prev_PBA", "previous_weaned",
   "sow_age_first_mating", "F_light_hr", "AI_light_hr"
 )
 
 # Discrete variables
-discrete_vars <- c(
+discrete_vars_orig <- c(
   "Year", "Seasons", "Prev_PBD.cat", "prev_losses.born.alive.cat"
 )
 
 # Random factor (for mixed models, not directly in causal discovery)
-random_factor <- "Company_farm"
+random_factor_orig <- "Company_farm"
 
-# Filter to only include variables that exist in matched_vars
+# Map to actual variable names in the data (handles case differences)
+continuous_vars <- sapply(continuous_vars_orig, function(v) {
+  if (v %in% names(var_name_map)) var_name_map[[v]] else v
+})
 continuous_vars <- intersect(continuous_vars, matched_vars)
+
+discrete_vars <- sapply(discrete_vars_orig, function(v) {
+  if (v %in% names(var_name_map)) var_name_map[[v]] else v
+})
 discrete_vars <- intersect(discrete_vars, matched_vars)
+
+random_factor <- if (random_factor_orig %in% names(var_name_map)) {
+  var_name_map[[random_factor_orig]]
+} else {
+  random_factor_orig
+}
 random_factor <- intersect(random_factor, matched_vars)
 
 cat("\n*** TARGET OUTCOME VARIABLE ***\n")
