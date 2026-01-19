@@ -19,7 +19,12 @@ install_if_missing <- function(packages, bioc_packages = character()) {
   # First, ensure BiocManager is installed if we have Bioconductor packages
   if (length(bioc_packages) > 0) {
     if (!require("BiocManager", quietly = TRUE)) {
+      cat("Installing BiocManager...\n")
       install.packages("BiocManager", repos = "https://cloud.r-project.org/")
+      if (!require("BiocManager", quietly = TRUE)) {
+        stop("Failed to install BiocManager. Please install it manually:\n",
+             "  install.packages('BiocManager')")
+      }
     }
   }
   
@@ -38,7 +43,7 @@ install_if_missing <- function(packages, bioc_packages = character()) {
   for (pkg in bioc_packages) {
     if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
       cat("Installing Bioconductor package:", pkg, "\n")
-      BiocManager::install(pkg, update = FALSE, ask = FALSE)
+      BiocManager::install(pkg, update = TRUE, ask = FALSE)
       if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
         stop("Failed to install Bioconductor package: ", pkg)
       }
