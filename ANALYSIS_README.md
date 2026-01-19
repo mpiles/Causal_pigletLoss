@@ -169,6 +169,15 @@ If you want to analyze a different set of variables, edit the `variable_list` st
 **Issue**: "Variable not found in data"
 - **Solution**: Check variable names in the data file. The script provides a list of available variables.
 
+**Issue**: "Cannot use character variables" or character type error
+- **Cause**: bnlearn requires all discrete variables to be factors, not characters. This commonly affects `Company_farm`.
+- **Solution**: The script now automatically converts character variables to factors. `Company_farm` will be included as a discrete factor in the analysis.
+- **Note**: If you previously removed `Company_farm` due to this error, you can now keep it in the analysis. The script handles the conversion automatically.
+
+**Issue**: "score 'bic-g' may only be used with continuous data"
+- **Cause**: Using wrong BIC score for mixed data types.
+- **Solution**: The script now automatically selects the correct score (bic-cg for mixed data). This is fixed in the latest version.
+
 **Issue**: "Package installation failed" (e.g., 'pcalg' or 'ggm' had non-zero exit status)
 - **Cause**: `pcalg`, `graph`, and `Rgraphviz` are Bioconductor packages, not CRAN packages. The script has been updated to handle this automatically.
 - **Solution**: If you still encounter issues, install packages manually:

@@ -245,14 +245,25 @@ cat("causally affect the target outcome:", target_variable, "\n\n")
 # Convert discrete variables to factors
 for (var in discrete_vars) {
   if (var %in% names(analysis_data)) {
+    if (is.character(analysis_data[[var]])) {
+      cat("Converting discrete variable", var, "from character to factor\n")
+    }
     analysis_data[[var]] <- as.factor(analysis_data[[var]])
   }
 }
 
 # Convert random factor to factor
+# Note: Company_farm is often character type and must be converted to factor
 for (var in random_factor) {
   if (var %in% names(analysis_data)) {
+    if (is.character(analysis_data[[var]])) {
+      cat("Converting random factor", var, "from character to factor\n")
+      cat("  This variable will be included in the analysis as a discrete factor\n")
+    }
     analysis_data[[var]] <- as.factor(analysis_data[[var]])
+    cat("  ✓", var, "has", length(levels(analysis_data[[var]])), "levels\n")
+  } else {
+    cat("  ✗ Warning:", var, "not found in data\n")
   }
 }
 
@@ -354,11 +365,17 @@ cat("\n\n=== Causal Discovery using bnlearn (Mixed Data) ===\n")
 bnlearn_data <- analysis_data
 
 # For bnlearn, we need to ensure proper data types
+# IMPORTANT: bnlearn cannot handle character variables - they must be factors
 for (var in names(bnlearn_data)) {
   if (var %in% c(discrete_vars, random_factor)) {
+    # Convert to factor (handles both character and numeric discrete variables)
     bnlearn_data[[var]] <- as.factor(bnlearn_data[[var]])
   } else if (var %in% continuous_vars) {
     bnlearn_data[[var]] <- as.numeric(bnlearn_data[[var]])
+  } else if (is.character(bnlearn_data[[var]])) {
+    # Any remaining character variables should be converted to factors
+    cat("Warning: Converting character variable", var, "to factor\n")
+    bnlearn_data[[var]] <- as.factor(bnlearn_data[[var]])
   }
 }
 
@@ -370,22 +387,23 @@ cat("Number of variables:", ncol(bnlearn_data), "\n")
 has_continuous <- any(sapply(bnlearn_data, is.numeric))
 has_discrete <- any(sapply(bnlearn_data, is.factor))
 
+# Select appropriate score based on data types
 if (has_continuous && has_discrete) {
   cat("Data type: Mixed (continuous and discrete variables)\n")
   cat("Using conditional Gaussian BN with bic-cg score\n\n")
-  # For mixed continuous-discrete data, use bic-cg (conditional Gaussian)
-  bn_structure <- hc(bnlearn_data, score = "bic-cg")
+  selected_score <- "bic-cg"
 } else if (has_continuous) {
   cat("Data type: Continuous only\n")
   cat("Using Gaussian BN with bic-g score\n\n")
-  # For continuous-only data, use bic-g (Gaussian)
-  bn_structure <- hc(bnlearn_data, score = "bic-g")
+  selected_score <- "bic-g"
 } else {
   cat("Data type: Discrete only\n")
   cat("Using discrete BN with bic score\n\n")
-  # For discrete-only data, use bic (discrete)
-  bn_structure <- hc(bnlearn_data, score = "bic")
+  selected_score <- "bic"
 }
+
+# Learn the structure using hill-climbing with selected score
+bn_structure <- hc(bnlearn_data, score = selected_score)
 
 cat("\n=== Bayesian Network Structure ===\n")
 print(bn_structure)
@@ -443,14 +461,8 @@ dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
 # Calculate network score using the same score type as structure learning
-if (has_continuous && has_discrete) {
-  bn_score <- score(bn_structure, bnlearn_data, type = "bic-cg")
-} else if (has_continuous) {
-  bn_score <- score(bn_structure, bnlearn_data, type = "bic-g")
-} else {
-  bn_score <- score(bn_structure, bnlearn_data, type = "bic")
-}
-cat("\nBIC Score:", bn_score, "\n")
+bn_score <- score(bn_structure, bnlearn_data, type = selected_score)
+cat("\nBIC Score (", selected_score, "):", bn_score, "\n")
 
 ################################################################################
 # 5.5. TARGET VARIABLE CAUSAL STRUCTURE ANALYSIS
@@ -530,19 +542,9 @@ cat("\n\n=== Assessing Strength of Causal Relationships ===\n")
 cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n")
 
 # Use the same score as determined earlier for consistency
-if (has_continuous && has_discrete) {
-  cat("Using bic-cg score for mixed data\n")
-  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                                 algorithm.args = list(score = "bic-cg"))
-} else if (has_continuous) {
-  cat("Using bic-g score for continuous data\n")
-  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                                 algorithm.args = list(score = "bic-g"))
-} else {
-  cat("Using bic score for discrete data\n")
-  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                                 algorithm.args = list(score = "bic"))
-}
+cat("Using", selected_score, "score for bootstrap analysis\n")
+boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                               algorithm.args = list(score = selected_score))
 
 # Filter strong arcs (strength > 0.5, direction > 0.5)
 strong_arcs <- boot_strength[boot_strength$strength > 0.5 & boot_strength$direction > 0.5, ]
