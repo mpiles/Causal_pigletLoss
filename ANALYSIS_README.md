@@ -27,10 +27,31 @@ The analysis examines causal relationships between 12 key variables:
 - R >= 4.0.0
 
 ### Required R Packages
-The script will automatically install missing packages, but you can install them manually:
+
+The script will automatically install missing packages. Note that some packages come from Bioconductor:
+
+**CRAN packages:**
+- bnlearn
+- dplyr
+- ggplot2
+
+**Bioconductor packages:**
+- pcalg
+- graph
+- Rgraphviz
+
+If automatic installation fails, install them manually:
 
 ```r
-install.packages(c("pcalg", "graph", "Rgraphviz", "bnlearn", "dplyr", "ggplot2"))
+# Install BiocManager first
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# Install CRAN packages
+install.packages(c("bnlearn", "dplyr", "ggplot2"))
+
+# Install Bioconductor packages
+BiocManager::install(c("pcalg", "graph", "Rgraphviz"))
 ```
 
 ### Data File
@@ -144,12 +165,24 @@ If you want to analyze a different set of variables, edit the `variable_list` st
 **Issue**: "Variable not found in data"
 - **Solution**: Check variable names in the data file. The script provides a list of available variables.
 
-**Issue**: "Package installation failed"
-- **Solution**: Install packages manually with appropriate repositories:
+**Issue**: "Package installation failed" (e.g., 'pcalg' or 'ggm' had non-zero exit status)
+- **Cause**: `pcalg`, `graph`, and `Rgraphviz` are Bioconductor packages, not CRAN packages. The script has been updated to handle this automatically.
+- **Solution**: If you still encounter issues, install packages manually:
   ```r
+  # Step 1: Install BiocManager
   if (!requireNamespace("BiocManager", quietly = TRUE))
       install.packages("BiocManager")
-  BiocManager::install(c("graph", "Rgraphviz"))
+  
+  # Step 2: Install CRAN packages
+  install.packages(c("bnlearn", "dplyr", "ggplot2"))
+  
+  # Step 3: Install Bioconductor packages
+  BiocManager::install(c("pcalg", "graph", "Rgraphviz"))
+  ```
+- **Note**: On some systems, you may need system dependencies. On Linux:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install libxml2-dev libgraphviz-dev
   ```
 
 **Issue**: "Insufficient observations"

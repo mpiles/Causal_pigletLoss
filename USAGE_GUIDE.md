@@ -341,19 +341,29 @@ cat("Average Markov blanket size:", mean(sapply(nodes(bn_structure),
 
 #### Error: "Package installation failed"
 
-**Problem**: Required packages won't install
+**Problem**: Required packages won't install (e.g., "installation of package 'pcalg' had non-zero exit status")
+
+**Cause**: `pcalg`, `graph`, and `Rgraphviz` are Bioconductor packages, not standard CRAN packages. The script has been updated to automatically handle this.
 
 **Solutions:**
-1. Install Bioconductor packages manually:
+1. The updated script automatically uses BiocManager for Bioconductor packages. Simply run the script again.
+
+2. If still failing, install packages manually in the correct order:
    ```r
+   # Step 1: Install BiocManager
    if (!requireNamespace("BiocManager", quietly = TRUE))
        install.packages("BiocManager")
-   BiocManager::install(c("graph", "Rgraphviz"))
+   
+   # Step 2: Install CRAN packages
+   install.packages(c("bnlearn", "dplyr", "ggplot2"))
+   
+   # Step 3: Install Bioconductor packages
+   BiocManager::install(c("graph", "Rgraphviz", "pcalg"))
    ```
 
-2. If still failing, check your R version (need 4.0.0+)
+3. Check your R version (need 4.0.0+): `version`
 
-3. On Linux, you may need system libraries:
+4. On Linux, you may need system libraries:
    ```bash
    # Ubuntu/Debian
    sudo apt-get install libxml2-dev libgraphviz-dev

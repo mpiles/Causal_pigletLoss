@@ -15,19 +15,44 @@ setwd("/GMA_NAS1/miriam/Causal_pigletLoss")
 cat("Working directory:", getwd(), "\n\n")
 
 # Function to install packages if not available
-install_if_missing <- function(packages) {
+install_if_missing <- function(packages, bioc_packages = character()) {
+  # First, ensure BiocManager is installed if we have Bioconductor packages
+  if (length(bioc_packages) > 0) {
+    if (!require("BiocManager", quietly = TRUE)) {
+      install.packages("BiocManager", repos = "https://cloud.r-project.org/")
+    }
+  }
+  
+  # Install CRAN packages
   for (pkg in packages) {
     if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+      cat("Installing CRAN package:", pkg, "\n")
       install.packages(pkg, repos = "https://cloud.r-project.org/")
-      library(pkg, character.only = TRUE)
+      if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        stop("Failed to install package: ", pkg)
+      }
+    }
+  }
+  
+  # Install Bioconductor packages
+  for (pkg in bioc_packages) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+      cat("Installing Bioconductor package:", pkg, "\n")
+      BiocManager::install(pkg, update = FALSE, ask = FALSE)
+      if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        stop("Failed to install Bioconductor package: ", pkg)
+      }
     }
   }
 }
 
-# Install and load required packages
-required_packages <- c("pcalg", "graph", "Rgraphviz", "bnlearn", "dplyr", "ggplot2")
+# Define packages
+cran_packages <- c("bnlearn", "dplyr", "ggplot2")
+bioc_packages <- c("graph", "Rgraphviz", "pcalg")
+
 cat("Checking and installing required packages...\n")
-install_if_missing(required_packages)
+cat("This may take several minutes on first run...\n\n")
+install_if_missing(cran_packages, bioc_packages)
 
 # Load required libraries (now guaranteed to be installed)
 library(pcalg)      # For PC algorithm causal discovery
