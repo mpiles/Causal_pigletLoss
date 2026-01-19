@@ -9,12 +9,6 @@
 # Date: 2026-01-19
 ################################################################################
 
-# Load required libraries
-library(pcalg)      # For PC algorithm causal discovery
-library(graph)      # For graph operations
-library(Rgraphviz)  # For graph visualization
-library(bnlearn)    # Alternative causal discovery methods
-
 # Function to install packages if not available
 install_if_missing <- function(packages) {
   for (pkg in packages) {
@@ -25,10 +19,16 @@ install_if_missing <- function(packages) {
   }
 }
 
-# Install required packages
+# Install and load required packages
 required_packages <- c("pcalg", "graph", "Rgraphviz", "bnlearn", "dplyr", "ggplot2")
 cat("Checking and installing required packages...\n")
 install_if_missing(required_packages)
+
+# Load required libraries (now guaranteed to be installed)
+library(pcalg)      # For PC algorithm causal discovery
+library(graph)      # For graph operations
+library(Rgraphviz)  # For graph visualization
+library(bnlearn)    # Alternative causal discovery methods
 
 ################################################################################
 # 1. DATA LOADING
