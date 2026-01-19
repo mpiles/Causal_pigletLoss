@@ -37,13 +37,28 @@ library(bnlearn)    # Alternative causal discovery methods
 cat("\n=== Loading Data ===\n")
 
 # Load the data file
-data_file <- "bdporc_dataC2.RData"
+# First try the specified path, then fall back to current directory
+data_file_paths <- c(
+  "/work/miriam/Causal_pigletLoss/bdporc_dataC2.RData",
+  "bdporc_dataC2.RData"
+)
 
-if (!file.exists(data_file)) {
-  stop("Error: Data file 'bdporc_dataC2.RData' not found in the current directory.\n",
-       "Please ensure the data file is in the working directory: ", getwd())
+data_file <- NULL
+for (path in data_file_paths) {
+  if (file.exists(path)) {
+    data_file <- path
+    break
+  }
 }
 
+if (is.null(data_file)) {
+  stop("Error: Data file 'bdporc_dataC2.RData' not found.\n",
+       "Searched in:\n",
+       paste("  -", data_file_paths, collapse = "\n"), "\n",
+       "Current working directory: ", getwd())
+}
+
+cat("Loading data from:", data_file, "\n")
 load(data_file)
 
 # Identify the data object (it might have a different name in the .RData file)
@@ -68,7 +83,9 @@ cat("Data dimensions:", nrow(data), "rows x", ncol(data), "columns\n")
 cat("\n=== Selecting Variables for Causal Analysis ===\n")
 
 # Define the variables for causal analysis
-# Based on the problem statement:
+# Based on the problem statement and user feedback:
+# TARGET OUTCOME: losses.born.alive (lactation losses over born alive)
+# PREDICTOR VARIABLES (12):
 # 1. Avg.sows (continuous)
 # 2. Prev_sowlactpd (continuous)
 # 3. Prev_PBA (continuous)
@@ -82,7 +99,11 @@ cat("\n=== Selecting Variables for Causal Analysis ===\n")
 # 11. Prev_PBD.cat (discrete)
 # 12. Prev_losses.born.alive.cat (discrete)
 
-variable_list <- c(
+# TARGET OUTCOME VARIABLE
+target_variable <- "losses.born.alive"  # Lactation losses over born alive (continuous)
+
+# PREDICTOR VARIABLES
+predictor_list <- c(
   "avg.sows",                      # Average number of sows
   "prev_sowlactpd",                # Previous sow lactation period
   "Prev_PBA",                      # Previous piglets born alive
@@ -96,6 +117,9 @@ variable_list <- c(
   "Prev_PBD.cat",                  # Previous piglets born dead (categorical)
   "prev_losses.born.alive.cat"     # Previous losses over born alive (categorical)
 )
+
+# ALL VARIABLES (target + predictors)
+variable_list <- c(target_variable, predictor_list)
 
 # Note: Some variable names might differ in capitalization or exact spelling
 # Let's check which variables are actually present in the data
@@ -149,8 +173,12 @@ cat("Removed", original_rows - nrow(analysis_data), "rows with missing values\n"
 cat("Final dataset:", nrow(analysis_data), "rows\n")
 
 # Separate continuous and discrete variables
-# Continuous variables (for PC algorithm)
+# TARGET OUTCOME (continuous)
+target_var <- "losses.born.alive"
+
+# Continuous predictor variables (for PC algorithm)
 continuous_vars <- c(
+  "losses.born.alive",            # TARGET: Lactation losses over born alive
   "avg.sows", "prev_sowlactpd", "Prev_PBA", "previous_weaned",
   "sow_age_first_mating", "F_light_hr", "AI_light_hr"
 )
@@ -168,16 +196,27 @@ continuous_vars <- intersect(continuous_vars, matched_vars)
 discrete_vars <- intersect(discrete_vars, matched_vars)
 random_factor <- intersect(random_factor, matched_vars)
 
-cat("\nContinuous variables (", length(continuous_vars), "):\n")
-cat(paste("  -", continuous_vars, collapse = "\n"), "\n")
+cat("\n*** TARGET OUTCOME VARIABLE ***\n")
+if (target_var %in% matched_vars) {
+  cat("  ✓", target_var, "(continuous) - Lactation losses over born alive\n")
+} else {
+  cat("  ✗", target_var, "- NOT FOUND (analysis may be limited)\n")
+}
 
-cat("\nDiscrete variables (", length(discrete_vars), "):\n")
+cat("\nContinuous predictor variables (", length(continuous_vars) - 1, "):\n")
+cat(paste("  -", setdiff(continuous_vars, target_var), collapse = "\n"), "\n")
+
+cat("\nDiscrete predictor variables (", length(discrete_vars), "):\n")
 cat(paste("  -", discrete_vars, collapse = "\n"), "\n")
 
 if (length(random_factor) > 0) {
   cat("\nRandom factor:\n")
   cat(paste("  -", random_factor, collapse = "\n"), "\n")
 }
+
+cat("\n*** ANALYSIS FOCUS ***\n")
+cat("The causal analysis will examine how the 12 predictor variables\n")
+cat("causally affect the target outcome:", target_var, "\n\n")
 
 # Convert discrete variables to factors
 for (var in discrete_vars) {
@@ -242,10 +281,31 @@ if (length(continuous_vars) >= 2) {
   edges <- which(adj_matrix != 0, arr.ind = TRUE)
   if (nrow(edges) > 0) {
     cat("\nIdentified Causal Relationships:\n")
+    
+    # Separate relationships involving the target outcome
+    target_related <- c()
+    other_relationships <- c()
+    
     for (i in 1:nrow(edges)) {
       from <- rownames(adj_matrix)[edges[i, 1]]
       to <- colnames(adj_matrix)[edges[i, 2]]
-      cat("  ", from, "->", to, "\n")
+      relationship <- paste("  ", from, "->", to)
+      
+      if (from == target_var || to == target_var) {
+        target_related <- c(target_related, relationship)
+      } else {
+        other_relationships <- c(other_relationships, relationship)
+      }
+    }
+    
+    if (length(target_related) > 0) {
+      cat("\n*** Relationships involving TARGET (", target_var, ") ***\n", sep = "")
+      cat(paste(target_related, collapse = "\n"), "\n")
+    }
+    
+    if (length(other_relationships) > 0) {
+      cat("\nOther relationships between predictors:\n")
+      cat(paste(other_relationships, collapse = "\n"), "\n")
     }
   } else {
     cat("\nNo causal relationships identified at alpha = 0.05\n")
@@ -293,20 +353,123 @@ cat("\nNumber of arcs (directed edges):", nrow(arcs_bn), "\n")
 
 if (nrow(arcs_bn) > 0) {
   cat("\nIdentified Causal Relationships (Bayesian Network):\n")
+  
+  # Separate relationships involving the target outcome
+  target_causes <- c()
+  target_effects <- c()
+  other_relationships <- c()
+  
   for (i in 1:nrow(arcs_bn)) {
-    cat("  ", arcs_bn[i, "from"], "->", arcs_bn[i, "to"], "\n")
+    from <- arcs_bn[i, "from"]
+    to <- arcs_bn[i, "to"]
+    
+    if (to == target_var) {
+      target_causes <- c(target_causes, from)
+      cat("  ", from, "->", to, " *** (CAUSES TARGET) ***\n", sep = "")
+    } else if (from == target_var) {
+      target_effects <- c(target_effects, to)
+      cat("  ", from, "->", to, " (target affects this)\n", sep = "")
+    } else {
+      other_relationships <- c(other_relationships, paste(from, "->", to))
+    }
+  }
+  
+  cat("\n*** DIRECT CAUSES OF TARGET (", target_var, ") ***\n", sep = "")
+  if (length(target_causes) > 0) {
+    cat("Variables that directly cause ", target_var, ":\n", sep = "")
+    cat(paste("  -", target_causes, collapse = "\n"), "\n")
+  } else {
+    cat("No direct causes identified (may indicate independence or data issues)\n")
+  }
+  
+  if (length(other_relationships) > 0) {
+    cat("\nOther relationships (between predictors):\n")
+    cat(paste("  ", other_relationships, collapse = "\n"), "\n")
   }
 }
 
 # Plot the Bayesian network
 pdf("causal_graph_bayesian_network.pdf", width = 12, height = 10)
-graphviz.plot(bn_structure, main = "Causal Graph - Bayesian Network (All Variables)")
+# Highlight the target variable
+node_attrs <- list()
+if (target_var %in% nodes(bn_structure)) {
+  node_attrs[[target_var]] <- list(fillcolor = "lightblue", style = "filled")
+}
+graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_var))
 dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
 # Calculate network score
 bn_score <- score(bn_structure, bnlearn_data, type = "bic-g")
 cat("\nBIC Score:", bn_score, "\n")
+
+################################################################################
+# 5.5. TARGET VARIABLE CAUSAL STRUCTURE ANALYSIS
+################################################################################
+
+cat("\n\n=== Detailed Analysis of Target Variable (", target_var, ") ===\n", sep = "")
+
+# Get parents (direct causes)
+if (target_var %in% nodes(bn_structure)) {
+  target_parents <- parents(bn_structure, target_var)
+  cat("\nDirect causes (parents) of", target_var, ":\n")
+  if (length(target_parents) > 0) {
+    cat(paste("  ", 1:length(target_parents), ". ", target_parents, sep = "", collapse = "\n"), "\n")
+    cat("\nThese", length(target_parents), "variable(s) directly influence", target_var, "\n")
+  } else {
+    cat("  None identified (may indicate the target is independent or exogenous)\n")
+  }
+  
+  # Get children (direct effects)
+  target_children <- children(bn_structure, target_var)
+  cat("\nDirect effects (children) of", target_var, ":\n")
+  if (length(target_children) > 0) {
+    cat(paste("  ", 1:length(target_children), ". ", target_children, sep = "", collapse = "\n"), "\n")
+  } else {
+    cat("  None identified\n")
+  }
+  
+  # Get Markov blanket (parents + children + parents of children)
+  target_mb <- mb(bn_structure, target_var)
+  cat("\nMarkov Blanket of", target_var, ":\n")
+  cat("(Variables that are statistically relevant for predicting", target_var, ")\n")
+  if (length(target_mb) > 0) {
+    cat(paste("  ", 1:length(target_mb), ". ", target_mb, sep = "", collapse = "\n"), "\n")
+  } else {
+    cat("  None identified\n")
+  }
+  
+  # Create a focused subgraph showing only target and its immediate neighbors
+  if (length(target_parents) > 0 || length(target_children) > 0) {
+    cat("\n*** Creating focused DAG for target variable ***\n")
+    
+    # Get all relevant nodes (target + markov blanket)
+    relevant_nodes <- unique(c(target_var, target_mb))
+    
+    # Extract subgraph
+    if (length(relevant_nodes) > 1) {
+      # Filter arcs to only those involving relevant nodes
+      all_arcs <- arcs(bn_structure)
+      relevant_arcs <- all_arcs[all_arcs[, "from"] %in% relevant_nodes & 
+                                 all_arcs[, "to"] %in% relevant_nodes, , drop = FALSE]
+      
+      if (nrow(relevant_arcs) > 0) {
+        # Create subgraph
+        subgraph <- empty.graph(relevant_nodes)
+        arcs(subgraph) <- relevant_arcs
+        
+        # Plot focused DAG
+        pdf("causal_dag_target_focused.pdf", width = 10, height = 8)
+        graphviz.plot(subgraph, 
+                     main = paste("Focused DAG: Direct Causes and Effects of", target_var))
+        dev.off()
+        cat("Focused DAG saved to: causal_dag_target_focused.pdf\n")
+      }
+    }
+  }
+} else {
+  cat("\nWarning: Target variable", target_var, "not found in the Bayesian network\n")
+}
 
 ################################################################################
 # 6. STRENGTH OF RELATIONSHIPS
@@ -324,11 +487,30 @@ strong_arcs <- boot_strength[boot_strength$strength > 0.5 & boot_strength$direct
 
 if (nrow(strong_arcs) > 0) {
   cat("\nStrong Causal Relationships (strength > 0.5, direction > 0.5):\n")
-  print(strong_arcs[order(-strong_arcs$strength), ])
+  
+  # Separate target-related and other relationships
+  target_arcs <- strong_arcs[strong_arcs$from == target_var | strong_arcs$to == target_var, ]
+  other_arcs <- strong_arcs[strong_arcs$from != target_var & strong_arcs$to != target_var, ]
+  
+  if (nrow(target_arcs) > 0) {
+    cat("\n*** Strong relationships involving TARGET (", target_var, ") ***\n", sep = "")
+    print(target_arcs[order(-target_arcs$strength), ])
+  }
+  
+  if (nrow(other_arcs) > 0) {
+    cat("\nStrong relationships between predictors:\n")
+    print(other_arcs[order(-other_arcs$strength), ])
+  }
   
   # Save to CSV
   write.csv(strong_arcs, "strong_causal_relationships.csv", row.names = FALSE)
-  cat("\nStrong relationships saved to: strong_causal_relationships.csv\n")
+  cat("\nAll strong relationships saved to: strong_causal_relationships.csv\n")
+  
+  # Save target-specific relationships if any
+  if (nrow(target_arcs) > 0) {
+    write.csv(target_arcs, "target_causal_relationships.csv", row.names = FALSE)
+    cat("Target-specific relationships saved to: target_causal_relationships.csv\n")
+  }
 } else {
   cat("\nNo strong causal relationships found with current thresholds\n")
 }
@@ -372,41 +554,62 @@ cat("                        CAUSAL ANALYSIS SUMMARY REPORT                     
 cat("================================================================================\n")
 cat("\n")
 
+cat("*** RESEARCH OBJECTIVE ***\n")
+cat("Assess causal relationships between 12 predictor variables and the outcome:\n")
+cat("  TARGET: ", target_var, " (lactation losses over born alive)\n", sep = "")
+cat("\n")
+
 cat("Dataset Information:\n")
 cat("  - Total observations:", nrow(analysis_data), "\n")
 cat("  - Total variables analyzed:", ncol(analysis_data), "\n")
-cat("  - Continuous variables:", length(continuous_vars), "\n")
-cat("  - Discrete variables:", length(discrete_vars), "\n")
+cat("  - Target outcome: 1 (", target_var, ")\n", sep = "")
+cat("  - Continuous predictors:", length(continuous_vars) - 1, "\n")
+cat("  - Discrete predictors:", length(discrete_vars), "\n")
 cat("  - Random factors:", length(random_factor), "\n")
 cat("\n")
 
 cat("Analysis Methods Used:\n")
 cat("  1. PC Algorithm (Peter-Clark) for continuous variables\n")
-cat("  2. Hill-Climbing with BIC score for all variables (Bayesian Network)\n")
-cat("  3. Bootstrap analysis for arc strength assessment\n")
+cat("  2. Hill-Climbing with BIC score for all variables (Bayesian Network/DAG)\n")
+cat("  3. Bootstrap analysis (200 samples) for arc strength assessment\n")
+cat("  4. Markov Blanket analysis for target variable\n")
 cat("\n")
 
 cat("Output Files Generated:\n")
 cat("  - causal_graph_continuous.pdf: Causal graph from PC algorithm\n")
-cat("  - causal_graph_bayesian_network.pdf: Bayesian network structure\n")
+cat("  - causal_graph_bayesian_network.pdf: Complete Bayesian network (DAG)\n")
+cat("  - causal_dag_target_focused.pdf: Focused DAG showing causes of target\n")
 cat("  - arc_strength_plot.pdf: Arc strength visualization\n")
-cat("  - strong_causal_relationships.csv: Table of strong relationships\n")
+cat("  - strong_causal_relationships.csv: Table of all strong relationships\n")
+cat("  - target_causal_relationships.csv: Relationships involving target only\n")
 cat("\n")
 
-cat("Key Findings:\n")
+cat("*** KEY FINDINGS ***\n")
 if (exists("arcs_bn") && nrow(arcs_bn) > 0) {
-  cat("  - Total causal relationships identified:", nrow(arcs_bn), "\n")
+  cat("Total causal relationships identified:", nrow(arcs_bn), "\n")
+  
+  if (exists("target_causes") && length(target_causes) > 0) {
+    cat("\nDirect causes of", target_var, "(", length(target_causes), "):\n")
+    cat(paste("  -", target_causes, collapse = "\n"), "\n")
+  } else {
+    cat("\nDirect causes of", target_var, ": None identified\n")
+  }
+  
   if (exists("strong_arcs") && nrow(strong_arcs) > 0) {
-    cat("  - Strong relationships (bootstrap strength > 0.5):", nrow(strong_arcs), "\n")
+    cat("\nStrong relationships (bootstrap strength > 0.5):", nrow(strong_arcs), "\n")
+    if (exists("target_arcs") && nrow(target_arcs) > 0) {
+      cat("  - Involving target:", nrow(target_arcs), "\n")
+    }
   }
 }
 cat("\n")
 
 cat("Interpretation Notes:\n")
-cat("  - Arrows indicate potential causal direction (X -> Y means X may cause Y)\n")
-cat("  - Strength indicates reliability of the relationship (based on bootstrap)\n")
+cat("  - The DAG shows causal direction: X -> Y means X causally influences Y\n")
+cat("  - Direct causes (parents) of the target are the primary variables to consider\n")
+cat("  - Markov blanket variables are statistically relevant for prediction\n")
+cat("  - Strength > 0.5 indicates reliable relationship (appears in >50% of bootstraps)\n")
 cat("  - BIC score:", ifelse(exists("bn_score"), round(bn_score, 2), "N/A"), "\n")
-cat("  - Lower BIC scores indicate better model fit\n")
 cat("\n")
 
 cat("================================================================================\n")

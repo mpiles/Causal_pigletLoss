@@ -44,6 +44,18 @@ example_data$previous_weaned <- example_data$previous_weaned +
 example_data$Prev_PBA <- example_data$Prev_PBA + 
   0.2 * (example_data$prev_sowlactpd - mean(example_data$prev_sowlactpd))
 
+# TARGET OUTCOME: losses.born.alive
+# Generate with causal relationships to predictor variables
+# This represents lactation losses over born alive
+example_data$losses.born.alive <- 0.05 +  # baseline
+  0.002 * (example_data$prev_sowlactpd - mean(example_data$prev_sowlactpd)) +  # lactation effect
+  -0.001 * (example_data$Prev_PBA - mean(example_data$Prev_PBA)) +  # more born alive reduces losses
+  0.0005 * (example_data$sow_age_first_mating - mean(example_data$sow_age_first_mating)) +  # age effect
+  rnorm(n, mean = 0, sd = 0.02)  # random noise
+
+# Ensure losses.born.alive is positive and reasonable
+example_data$losses.born.alive <- pmax(0, pmin(1, example_data$losses.born.alive))
+
 # Introduce some missing values (5% random)
 missing_prob <- 0.05
 for (col in names(example_data)) {
