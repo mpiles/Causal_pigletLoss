@@ -220,14 +220,14 @@ discrete_vars_orig <- c(
 random_factor_orig <- "Company_farm"
 
 # Map to actual variable names in the data (handles case differences)
-continuous_vars <- sapply(continuous_vars_orig, function(v) {
+continuous_vars <- unname(sapply(continuous_vars_orig, function(v) {
   if (v %in% names(var_name_map)) var_name_map[[v]] else v
-})
+}))
 continuous_vars <- intersect(continuous_vars, matched_vars)
 
-discrete_vars <- sapply(discrete_vars_orig, function(v) {
+discrete_vars <- unname(sapply(discrete_vars_orig, function(v) {
   if (v %in% names(var_name_map)) var_name_map[[v]] else v
-})
+}))
 discrete_vars <- intersect(discrete_vars, matched_vars)
 
 random_factor <- if (random_factor_orig %in% names(var_name_map)) {
