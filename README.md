@@ -16,8 +16,9 @@ Assess causal relationships between farm management and reproductive variables t
 ## Quick Start
 
 1. Ensure you have R installed (version 4.0.0 or higher)
-2. The data file `bdporc_dataC2.RData` is located at `/work/miriam/Causal_pigletLoss/`
-3. Run the analysis:
+2. The script is configured to work in `/GMA_NAS1/miriam/Causal_pigletLoss/`
+3. Ensure `bdporc_dataC2.RData` is in the working directory
+4. Run the analysis:
    ```r
    source("causal_analysis.R")
    ```
