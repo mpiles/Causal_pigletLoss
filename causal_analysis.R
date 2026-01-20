@@ -426,60 +426,80 @@ if (has_continuous && has_discrete) {
 # ============================================================================
 # DOMAIN KNOWLEDGE CONSTRAINTS
 # ============================================================================
-# Environmental variables (F_light_hr, AI_light_hr) should NOT be caused by
-# other variables. They are determined by external environmental/seasonal 
-# factors, not by pig reproductive variables.
+# EXOGENOUS variables should NOT be caused by other variables. These include:
+# 1. Environmental variables: Light hours determined by season/latitude/policy
+# 2. Temporal variables: Year, Seasons, yearseason (time cannot be caused)
+# 3. Farm identifiers: company_farm, Company_farm (farm ID is fixed)
+# 4. Farm size: avg.sows (herd size is a management decision, not an outcome)
 # 
 # We use a BLACKLIST to prevent incorrect causal directions where 
-# reproductive/management variables would cause environmental variables.
+# reproductive outcomes would cause exogenous variables.
 # 
-# Biological rationale:
-# - Light hours are determined by season/latitude/farm lighting policy
-# - Light hours can AFFECT reproductive outcomes (photoperiod effects)
-# - Light hours CANNOT be caused by reproductive outcomes
+# Biological/logical rationale:
+# - Light hours: determined by season/latitude/farm lighting policy
+# - Temporal variables: time cannot be caused by biological outcomes
+# - Farm identifiers: farm identity is fixed, not caused by outcomes
+# - Herd size: management decision, not caused by reproductive outcomes
+# - All these can AFFECT reproductive outcomes but CANNOT be effects themselves
 # ============================================================================
 
-# Identify environmental variables
-# These are variables determined by external factors (season, latitude, farm policy)
-# and cannot be caused by reproductive or management variables
-environmental_vars <- intersect(c("F_light_hr", "AI_light_hr"), names(bnlearn_data))
+# Identify exogenous variables (case-insensitive matching)
+# These are variables that are determined externally and cannot be caused by
+# reproductive or outcome variables
+exogenous_var_patterns <- c(
+  "f_light_hr", "F_light_hr",           # Light hours at farrowing
+  "ai_light_hr", "AI_light_hr",         # Light hours at AI
+  "avg.sows", "Avg.sows",               # Farm size (herd size)
+  "company_farm", "Company_farm",       # Farm identifier
+  "yearseason", "YearSeason",           # Year-season combination
+  "year", "Year",                       # Year (temporal)
+  "seasons", "Seasons", "Season"        # Season (temporal)
+)
 
-# Create blacklist: prevent any variable from causing environmental variables
+# Find which exogenous variables are actually present in the data
+exogenous_vars <- intersect(exogenous_var_patterns, names(bnlearn_data))
+
+# Create blacklist: prevent any variable from causing exogenous variables
 blacklist_edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
 
-if (length(environmental_vars) > 0) {
+if (length(exogenous_vars) > 0) {
   cat("\n*** Applying Domain Knowledge Constraints ***\n")
-  cat("Environmental variables identified:", paste(environmental_vars, collapse = ", "), "\n")
-  cat("These variables can only be CAUSES, not EFFECTS (based on biological knowledge)\n\n")
+  cat("Exogenous variables identified:", paste(exogenous_vars, collapse = ", "), "\n")
+  cat("These variables can only be CAUSES, not EFFECTS (based on domain knowledge)\n\n")
   
-  # For each environmental variable, blacklist all incoming edges
-  for (env_var in environmental_vars) {
+  # For each exogenous variable, blacklist all incoming edges
+  for (exog_var in exogenous_vars) {
     # Get all other variables (potential sources)
-    other_vars <- setdiff(names(bnlearn_data), env_var)
+    other_vars <- setdiff(names(bnlearn_data), exog_var)
     
-    # Create blacklist entries: no other variable can cause this environmental variable
+    # Create blacklist entries: no other variable can cause this exogenous variable
     for (other_var in other_vars) {
       blacklist_edges <- rbind(
         blacklist_edges,
-        data.frame(from = other_var, to = env_var, stringsAsFactors = FALSE)
+        data.frame(from = other_var, to = exog_var, stringsAsFactors = FALSE)
       )
     }
   }
   
-  cat("Blacklisted", nrow(blacklist_edges), "edges to prevent environmental variables from being effects\n")
+  cat("Blacklisted", nrow(blacklist_edges), "edges to prevent exogenous variables from being effects\n")
+  cat("Categories of exogenous variables:\n")
+  cat("  - Environmental: f_light_hr, AI_light_hr (photoperiod determined by season)\n")
+  cat("  - Temporal: Year, Seasons, yearseason (time cannot be caused)\n")
+  cat("  - Farm identity: company_farm (farm ID is fixed)\n")
+  cat("  - Herd size: avg.sows (management decision, not outcome)\n\n")
   cat("Examples of blacklisted relationships:\n")
-  cat("  - prev_PBA -> F_light_hr (BLOCKED: reproductive variable cannot cause light hours)\n")
-  cat("  - avg.sows -> F_light_hr (BLOCKED: herd size cannot cause light hours)\n")
-  cat("  - Prev_PBD.cat -> F_light_hr (BLOCKED: mortality cannot cause light hours)\n\n")
+  cat("  - prev_PBA -> f_light_hr (BLOCKED: reproductive variable cannot cause light hours)\n")
+  cat("  - losses.born.alive -> Year (BLOCKED: outcome cannot cause temporal variable)\n")
+  cat("  - Prev_PBD.cat -> company_farm (BLOCKED: mortality cannot cause farm identity)\n\n")
 }
 
 # Learn the structure using hill-climbing with selected score and domain constraints
-if (length(environmental_vars) > 0 && nrow(blacklist_edges) > 0) {
+if (length(exogenous_vars) > 0 && nrow(blacklist_edges) > 0) {
   bn_structure <- hc(bnlearn_data, score = selected_score, blacklist = blacklist_edges)
   cat("Structure learning completed with domain knowledge constraints applied.\n")
 } else {
   bn_structure <- hc(bnlearn_data, score = selected_score)
-  cat("Structure learning completed without domain constraints (no environmental variables found).\n")
+  cat("Structure learning completed without domain constraints (no exogenous variables found).\n")
 }
 
 cat("\n=== Bayesian Network Structure ===\n")
@@ -623,7 +643,7 @@ cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n"
 cat("Using", selected_score, "score for bootstrap analysis\n")
 
 # Apply the same domain knowledge constraints (blacklist) to bootstrap
-if (length(environmental_vars) > 0 && nrow(blacklist_edges) > 0) {
+if (length(exogenous_vars) > 0 && nrow(blacklist_edges) > 0) {
   cat("Applying domain knowledge constraints to bootstrap analysis\n")
   boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
                                  algorithm.args = list(score = selected_score, blacklist = blacklist_edges))

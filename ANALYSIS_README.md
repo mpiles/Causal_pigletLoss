@@ -110,40 +110,56 @@ The script will generate several output files:
 
 ## Domain Knowledge Constraints
 
-### Environmental Variables Cannot Be Effects
+### Exogenous Variables Cannot Be Effects
 
-**Important**: Environmental variables (photoperiod/light hours) are determined by external factors like season, latitude, and farm lighting policies. They **cannot be caused** by reproductive or management variables.
+**Important**: Exogenous variables are determined by external factors or are inherently fixed properties. They **cannot be caused** by reproductive outcomes or management variables.
 
-The analysis automatically applies **blacklist constraints** to prevent biologically impossible causal directions:
+The analysis automatically applies **blacklist constraints** to prevent logically/biologically impossible causal directions:
 
-#### Variables Classified as Environmental:
-- **F_light_hr**: Light hours at farrowing - determined by season and farm lighting policy
-- **AI_light_hr**: Light hours at artificial insemination - determined by season and farm lighting policy
+#### Variables Classified as Exogenous:
+
+1. **Environmental Variables** (photoperiod):
+   - **f_light_hr** / **F_light_hr**: Light hours at farrowing - determined by season, latitude, and farm lighting policy
+   - **ai_light_hr** / **AI_light_hr**: Light hours at artificial insemination - determined by season, latitude, and farm lighting policy
+
+2. **Temporal Variables** (time):
+   - **Year**: Calendar year - time cannot be caused by biological outcomes
+   - **Seasons**: Season of the year - temporal variable, not caused by outcomes
+   - **yearseason**: Year-season combination - temporal variable
+
+3. **Farm Identifiers**:
+   - **company_farm** / **Company_farm**: Farm identification code - fixed property, not caused by outcomes
+
+4. **Herd Size**:
+   - **avg.sows** / **Avg.sows**: Average number of sows in the farm - management decision, not caused by reproductive outcomes
 
 #### Constraint Rules:
-✅ **Allowed**: `F_light_hr → losses.born.alive` (light affects reproductive outcomes)  
-❌ **Blocked**: `prev_PBA → F_light_hr` (reproductive outcomes cannot cause light hours)  
-❌ **Blocked**: `avg.sows → F_light_hr` (herd size cannot cause light hours)  
-❌ **Blocked**: `Prev_PBD.cat → F_light_hr` (mortality cannot cause light hours)
+✅ **Allowed**: `f_light_hr → losses.born.alive` (light affects reproductive outcomes)  
+✅ **Allowed**: `Year → prev_PBA` (temporal effects on reproduction)  
+✅ **Allowed**: `company_farm → losses.born.alive` (farm-specific effects)  
+❌ **Blocked**: `prev_PBA → f_light_hr` (reproductive outcomes cannot cause light hours)  
+❌ **Blocked**: `losses.born.alive → Year` (outcomes cannot cause time)  
+❌ **Blocked**: `Prev_PBD.cat → company_farm` (mortality cannot cause farm identity)  
+❌ **Blocked**: `prev_PBA → avg.sows` (litter size cannot cause herd size)
 
 #### Why This Matters:
 
 Without domain constraints, the algorithm might infer reverse causality due to:
 1. **Seasonal confounding**: Season affects both light hours and reproductive performance
-2. **Spurious correlations**: Variables correlated through a common cause (season) may appear causally related
-3. **Lack of domain knowledge**: The algorithm doesn't know biological plausibility
+2. **Spurious correlations**: Variables correlated through a common cause may appear causally related
+3. **Lack of domain knowledge**: The algorithm doesn't know logical/biological plausibility
 
 **Example of problematic inference (without constraints)**:
 ```
-Analysis shows: prev_PBA → F_light_hr
+Analysis shows: prev_PBA → f_light_hr
 Interpretation: "Previous piglets born alive causes light hours"
-Problem: Biologically impossible! Light hours are environmental.
+Problem: Logically impossible! Light hours are environmental.
 Actual explanation: Both are affected by season (a confounder).
 ```
 
 **Corrected inference (with constraints)**:
 ```
-Analysis shows: F_light_hr → losses.born.alive
+Analysis shows: f_light_hr → losses.born.alive
 Interpretation: "Light hours (photoperiod) affects lactation losses"
 Biological basis: Photoperiod affects hormonal regulation and maternal behavior.
 ```
@@ -151,10 +167,10 @@ Biological basis: Photoperiod affects hormonal regulation and maternal behavior.
 ### How Constraints Are Implemented
 
 The script automatically:
-1. Identifies environmental variables (`F_light_hr`, `AI_light_hr`)
-2. Creates a blacklist preventing any variable → environmental variable
+1. Identifies exogenous variables (environmental, temporal, farm identifiers, herd size)
+2. Creates a blacklist preventing any variable → exogenous variable
 3. Applies blacklist to both structure learning and bootstrap analysis
-4. Ensures only biologically plausible causal directions are inferred
+4. Ensures only logically/biologically plausible causal directions are inferred
 
 For technical details, see the comments in `causal_analysis.R` starting at the "DOMAIN KNOWLEDGE CONSTRAINTS" section.
 
