@@ -164,15 +164,63 @@ Interpretation: "Light hours (photoperiod) affects lactation losses"
 Biological basis: Photoperiod affects hormonal regulation and maternal behavior.
 ```
 
+### Temporal Ordering Constraints
+
+**Important**: Variables measured at different time points in the reproductive cycle must respect temporal ordering. Future events **cannot cause** past events.
+
+The analysis automatically applies **temporal ordering constraints** to prevent violations of causality:
+
+#### Temporal Sequence in Reproductive Cycle:
+
+1. **Birth Event** (earliest):
+   - **prev_PBA** / **Prev_PBA**: Previous piglets born alive
+   - **prev_PBD.cat** / **Prev_PBD.cat**: Previous piglets born dead (categorical)
+
+2. **Lactation Period**:
+   - **prev_sowlactpd** / **Prev_sowlactpd**: Previous sow lactation period duration
+
+3. **Weaning Event** (latest):
+   - **previous_weaned** / **Previous_weaned**: Previous weaned piglets
+
+#### Temporal Ordering Rules:
+
+Since weaning happens **AFTER** birth and **AFTER** the lactation period:
+
+✅ **Allowed**: `prev_PBA → previous_weaned` (birth count can affect weaning success)  
+✅ **Allowed**: `Prev_PBD.cat → previous_weaned` (stillbirths can affect weaning outcomes)  
+✅ **Allowed**: `prev_sowlactpd → previous_weaned` (lactation duration can affect weaning)  
+
+❌ **Blocked**: `previous_weaned → prev_PBA` (weaning cannot cause birth count)  
+❌ **Blocked**: `previous_weaned → Prev_PBD.cat` (weaning cannot cause stillbirths)  
+❌ **Blocked**: `previous_weaned → prev_sowlactpd` (weaning cannot cause lactation duration)
+
+#### Why Temporal Ordering Matters:
+
+**Example of temporal violation (without constraints)**:
+```
+Analysis shows: previous_weaned → prev_PBA
+Interpretation: "Number weaned affects number born alive"
+Problem: Temporally impossible! Weaning happens AFTER birth.
+Actual explanation: Both are correlated through other factors.
+```
+
+**Corrected inference (with temporal constraints)**:
+```
+Analysis shows: prev_PBA → previous_weaned
+Interpretation: "Number born alive affects number weaned"
+Biological basis: More piglets born increases potential for more to be weaned.
+```
+
 ### How Constraints Are Implemented
 
 The script automatically:
 1. Identifies exogenous variables (environmental, temporal, farm identifiers, herd size)
 2. Creates a blacklist preventing any variable → exogenous variable
-3. Applies blacklist to both structure learning and bootstrap analysis
-4. Ensures only logically/biologically plausible causal directions are inferred
+3. Applies temporal ordering constraints to prevent future → past relationships
+4. Combines all constraints and applies to both structure learning and bootstrap analysis
+5. Ensures only logically/biologically plausible causal directions are inferred
 
-For technical details, see the comments in `causal_analysis.R` starting at the "DOMAIN KNOWLEDGE CONSTRAINTS" section.
+For technical details, see the comments in `causal_analysis.R` starting at the "DOMAIN KNOWLEDGE CONSTRAINTS" and "TEMPORAL ORDERING CONSTRAINTS" sections.
 
 ## Interpretation Guide
 

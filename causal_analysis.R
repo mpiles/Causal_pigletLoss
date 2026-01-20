@@ -493,13 +493,78 @@ if (length(exogenous_vars) > 0) {
   cat("  - Prev_PBD.cat -> company_farm (BLOCKED: mortality cannot cause farm identity)\n\n")
 }
 
+# ============================================================================
+# TEMPORAL ORDERING CONSTRAINTS
+# ============================================================================
+# Variables measured at different time points in the reproductive cycle must
+# respect temporal ordering: earlier events can cause later events, but not
+# vice versa.
+#
+# Temporal sequence in a reproductive cycle:
+# 1. Birth events: prev_PBA (piglets born alive), Prev_PBD.cat (piglets born dead)
+# 2. Lactation period: prev_sowlactpd (duration of lactation)
+# 3. Weaning event: previous_weaned (piglets successfully weaned at end of lactation)
+#
+# Therefore: previous_weaned CANNOT cause prev_PBA, Prev_PBD.cat, or prev_sowlactpd
+# (weaning happens AFTER birth and AFTER lactation period)
+# ============================================================================
+
+cat("\n*** Applying Temporal Ordering Constraints ***\n")
+
+# Define temporal ordering: later variables cannot cause earlier variables
+# Format: list of (later_var, earlier_vars) pairs
+temporal_constraints <- list(
+  # previous_weaned happens AFTER birth and lactation, so it cannot cause them
+  list(
+    later = c("previous_weaned", "Previous_weaned"),  # Case variations
+    earlier = c("prev_PBA", "Prev_PBA",               # Piglets born alive (at birth)
+                "prev_PBD.cat", "Prev_PBD.cat",       # Piglets born dead (at birth)
+                "prev_sowlactpd", "Prev_sowlactpd")   # Lactation period duration
+  )
+)
+
+# Apply temporal ordering constraints to blacklist
+temporal_edges_count <- 0
+for (constraint in temporal_constraints) {
+  # Find which later and earlier variables actually exist in the data
+  later_vars_present <- intersect(constraint$later, names(bnlearn_data))
+  earlier_vars_present <- intersect(constraint$earlier, names(bnlearn_data))
+  
+  if (length(later_vars_present) > 0 && length(earlier_vars_present) > 0) {
+    cat("Temporal constraint: Variables at later timepoint cannot cause earlier variables\n")
+    cat("  Later (cannot be causes of earlier):", paste(later_vars_present, collapse = ", "), "\n")
+    cat("  Earlier (can cause later):", paste(earlier_vars_present, collapse = ", "), "\n\n")
+    
+    # Block: later_var -> earlier_var (future cannot cause past)
+    for (later_var in later_vars_present) {
+      for (earlier_var in earlier_vars_present) {
+        blacklist_edges <- rbind(
+          blacklist_edges,
+          data.frame(from = later_var, to = earlier_var, stringsAsFactors = FALSE)
+        )
+        temporal_edges_count <- temporal_edges_count + 1
+      }
+    }
+  }
+}
+
+if (temporal_edges_count > 0) {
+  cat("Blacklisted", temporal_edges_count, "edges to enforce temporal ordering\n")
+  cat("Examples of temporally impossible relationships blocked:\n")
+  cat("  - previous_weaned -> prev_PBA (BLOCKED: weaning cannot cause birth count)\n")
+  cat("  - previous_weaned -> Prev_PBD.cat (BLOCKED: weaning cannot cause stillbirth count)\n")
+  cat("  - previous_weaned -> prev_sowlactpd (BLOCKED: weaning cannot cause lactation duration)\n\n")
+}
+
 # Learn the structure using hill-climbing with selected score and domain constraints
-if (length(exogenous_vars) > 0 && nrow(blacklist_edges) > 0) {
+if (nrow(blacklist_edges) > 0) {
   bn_structure <- hc(bnlearn_data, score = selected_score, blacklist = blacklist_edges)
-  cat("Structure learning completed with domain knowledge constraints applied.\n")
+  cat("Structure learning completed with domain knowledge and temporal ordering constraints applied.\n")
+  cat("Total blacklisted edges:", nrow(blacklist_edges), "\n\n")
 } else {
   bn_structure <- hc(bnlearn_data, score = selected_score)
-  cat("Structure learning completed without domain constraints (no exogenous variables found).\n")
+  cat("Structure learning completed without constraints.\n\n")
+}
 }
 
 cat("\n=== Bayesian Network Structure ===\n")
@@ -642,9 +707,9 @@ cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n"
 # Use the same score as determined earlier for consistency
 cat("Using", selected_score, "score for bootstrap analysis\n")
 
-# Apply the same domain knowledge constraints (blacklist) to bootstrap
-if (length(exogenous_vars) > 0 && nrow(blacklist_edges) > 0) {
-  cat("Applying domain knowledge constraints to bootstrap analysis\n")
+# Apply the same domain knowledge and temporal ordering constraints (blacklist) to bootstrap
+if (nrow(blacklist_edges) > 0) {
+  cat("Applying domain knowledge and temporal ordering constraints to bootstrap analysis\n")
   boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
                                  algorithm.args = list(score = selected_score, blacklist = blacklist_edges))
 } else {
