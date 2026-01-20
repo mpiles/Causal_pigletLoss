@@ -473,11 +473,12 @@ if (nrow(arcs_bn) > 0) {
 # Plot the Bayesian network with larger PDF size
 pdf("causal_graph_bayesian_network.pdf", width = 14, height = 12)
 # Highlight the target variable
-node_attrs <- list()
+highlight_list <- NULL
 if (target_variable %in% nodes(bn_structure)) {
-  node_attrs[[target_variable]] <- list(fillcolor = "lightblue", style = "filled")
+  highlight_list <- list(nodes = target_variable)
 }
-graphviz.plot(bn_structure, main = paste("Causal DAG - Focus on", target_variable))
+graphviz.plot(bn_structure, highlight = highlight_list, 
+              main = paste("Causal DAG - Focus on", target_variable))
 dev.off()
 cat("\nBayesian network graph saved to: causal_graph_bayesian_network.pdf\n")
 
