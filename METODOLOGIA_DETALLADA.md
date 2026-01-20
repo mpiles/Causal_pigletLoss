@@ -509,7 +509,151 @@ $$\text{Ch}(\text{losses.born.alive}) = \{Y : \text{losses.born.alive} \rightarr
 
 4. **Causalidad vs Asociación**: Aunque los métodos están diseñados para identificar causalidad, siempre se requiere conocimiento del dominio para validar las inferencias
 
-### 6.3. Consideraciones Prácticas
+### 6.3. Restricciones de Conocimiento del Dominio
+
+#### 6.3.1. Problema de Causalidad Reversa
+
+Los algoritmos de descubrimiento causal pueden inferir direcciones causales incorrectas cuando:
+- Existen variables confusoras no observadas
+- Las variables están correlacionadas por efectos estacionales/temporales
+- No se incorpora conocimiento experto del dominio
+
+**Ejemplo problemático**:
+```
+prev_PBA → F_light_hr  (INCORRECTO)
+avg.sows → F_light_hr  (INCORRECTO)
+Prev_PBD.cat → F_light_hr  (INCORRECTO)
+```
+
+**Interpretación errónea**: Estos resultados sugerirían que el número de lechones nacidos o el tamaño del hato **causan** las horas de luz, lo cual es biológicamente imposible.
+
+**Explicación del problema**: 
+- Las horas de luz (`F_light_hr`, `AI_light_hr`) son variables **ambientales** determinadas por:
+  - Estación del año (latitud, época)
+  - Políticas de iluminación artificial de la granja
+  - Factores externos al sistema productivo
+- Las variables ambientales **NO pueden ser causadas** por variables reproductivas o de manejo
+- La correlación entre estas variables se debe a **confusores estacionales** (ej: la estación afecta tanto las horas de luz como el rendimiento reproductivo)
+
+#### 6.3.2. Solución: Listas Negras (Blacklists)
+
+Para prevenir inferencias causales biológicamente imposibles, se implementan **restricciones de conocimiento del dominio** mediante listas negras:
+
+**Lista Negra para Variables Ambientales**:
+
+```r
+# Blacklist: Ninguna variable puede causar variables ambientales
+blacklist <- data.frame(
+  from = c("prev_PBA", "avg.sows", "Prev_PBD.cat", ...),
+  to = c("F_light_hr", "F_light_hr", "F_light_hr", ...)
+)
+```
+
+**Efecto**: 
+- Se bloquean todas las aristas de la forma `X → F_light_hr` donde X es cualquier variable no ambiental
+- Se permiten aristas `F_light_hr → Y` (variables ambientales pueden causar otras variables)
+
+**Justificación Biológica**:
+- Las horas de luz (fotoperiodo) **SÍ pueden afectar** el rendimiento reproductivo por efectos hormonales bien documentados
+- Las horas de luz **NO pueden ser afectadas** por variables reproductivas o de manejo
+- Esta restricción garantiza direcciones causales biológicamente plausibles
+
+#### 6.3.3. Variables Ambientales Identificadas
+
+En este análisis, las siguientes variables son clasificadas como **ambientales**:
+
+1. **`F_light_hr`**: Horas de luz al parto
+   - Determinada por: estación, latitud, política de iluminación
+   - **Rol causal**: Solo puede ser CAUSA, nunca EFECTO
+
+2. **`AI_light_hr`**: Horas de luz en inseminación artificial
+   - Determinada por: estación, latitud, política de iluminación
+   - **Rol causal**: Solo puede ser CAUSA, nunca EFECTO
+
+#### 6.3.4. Implementación en el Código
+
+El análisis aplica automáticamente las restricciones de conocimiento del dominio:
+
+```r
+# Paso 1: Identificar variables ambientales
+environmental_vars <- c("F_light_hr", "AI_light_hr")
+
+# Paso 2: Crear lista negra
+for (env_var in environmental_vars) {
+  other_vars <- setdiff(all_variables, env_var)
+  # Bloquear: other_var → env_var
+  blacklist <- rbind(blacklist, 
+                     data.frame(from = other_vars, to = env_var))
+}
+
+# Paso 3: Aprender estructura con restricciones
+bn_structure <- hc(data, score = "bic-cg", blacklist = blacklist)
+```
+
+**Resultado**: El DAG final respeta las restricciones biológicas y solo incluye relaciones causales plausibles.
+
+#### 6.3.5. Restricciones de Ordenamiento Temporal
+
+**Problema de Violaciones Temporales**:
+
+Además de las variables exógenas, es necesario respetar el **ordenamiento temporal** de eventos en el ciclo reproductivo. Los eventos futuros **NO pueden causar** eventos pasados.
+
+**Secuencia Temporal en el Ciclo Reproductivo**:
+
+1. **Nacimiento** (T1 - primero):
+   - `prev_PBA`, `Prev_PBA`: Lechones nacidos vivos en el parto anterior
+   - `prev_PBD.cat`, `Prev_PBD.cat`: Lechones nacidos muertos (categórica)
+
+2. **Lactación** (T2):
+   - `prev_sowlactpd`, `Prev_sowlactpd`: Duración del período de lactación
+
+3. **Destete** (T3 - último):
+   - `previous_weaned`, `Previous_weaned`: Lechones destetados al final de la lactación
+
+**Restricciones Temporales Implementadas**:
+
+Dado que el destete ocurre **DESPUÉS** del nacimiento y la lactación, se bloquean las siguientes relaciones:
+
+```r
+# Lista negra para ordenamiento temporal
+# previous_weaned (T3) NO puede causar eventos anteriores (T1, T2)
+temporal_constraints <- list(
+  list(
+    later = c("previous_weaned", "Previous_weaned"),  # Evento posterior
+    earlier = c("prev_PBA", "Prev_PBA",               # Eventos anteriores (nacimiento)
+                "prev_PBD.cat", "Prev_PBD.cat",       
+                "prev_sowlactpd", "Prev_sowlactpd")   # (lactación)
+  )
+)
+
+# Bloquear: evento_posterior → evento_anterior
+for (later_var in later_vars) {
+  for (earlier_var in earlier_vars) {
+    blacklist <- rbind(blacklist,
+                       data.frame(from = later_var, to = earlier_var))
+  }
+}
+```
+
+**Relaciones Bloqueadas** (temporalmente imposibles):
+
+❌ `previous_weaned → prev_PBA` (destete no puede causar número de nacidos)  
+❌ `previous_weaned → Prev_PBD.cat` (destete no puede causar mortinatos)  
+❌ `previous_weaned → prev_sowlactpd` (destete no puede causar duración de lactación)
+
+**Relaciones Permitidas** (orden temporal correcto):
+
+✅ `prev_PBA → previous_weaned` (nacidos vivos puede afectar destetados)  
+✅ `Prev_PBD.cat → previous_weaned` (mortinatos puede afectar destetados)  
+✅ `prev_sowlactpd → previous_weaned` (duración lactación puede afectar destetados)
+
+**Justificación**:
+
+- El principio de causalidad establece que las causas preceden a los efectos en el tiempo
+- Un evento en T3 (destete) no puede causar un evento en T1 (nacimiento) o T2 (lactación)
+- Las restricciones temporales garantizan que el DAG respeta la secuencia cronológica de eventos
+
+### 6.4. Consideraciones Prácticas
 
 - Los resultados deben interpretarse junto con conocimiento experto del dominio
 - Las relaciones causales identificadas son hipótesis que pueden requerir validación experimental

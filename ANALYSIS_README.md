@@ -100,11 +100,127 @@ The script will generate several output files:
   - **bic** (Discrete): For discrete-only variables
 - Learns directed acyclic graph (DAG) structure
 - Handles mixed data types seamlessly
+- **Domain knowledge constraints**: Applies biological constraints to prevent impossible causal directions (see section below)
 
 ### 3. Bootstrap Analysis
 - Assesses reliability of identified relationships
 - 200 bootstrap samples
 - Provides strength and direction scores for each arc
+- Uses the same domain knowledge constraints as structure learning
+
+## Domain Knowledge Constraints
+
+### Exogenous Variables Cannot Be Effects
+
+**Important**: Exogenous variables are determined by external factors or are inherently fixed properties. They **cannot be caused** by reproductive outcomes or management variables.
+
+The analysis automatically applies **blacklist constraints** to prevent logically/biologically impossible causal directions:
+
+#### Variables Classified as Exogenous:
+
+1. **Environmental Variables** (photoperiod):
+   - **f_light_hr** / **F_light_hr**: Light hours at farrowing - determined by season, latitude, and farm lighting policy
+   - **ai_light_hr** / **AI_light_hr**: Light hours at artificial insemination - determined by season, latitude, and farm lighting policy
+
+2. **Temporal Variables** (time):
+   - **Year**: Calendar year - time cannot be caused by biological outcomes
+   - **Seasons**: Season of the year - temporal variable, not caused by outcomes
+   - **yearseason**: Year-season combination - temporal variable
+
+3. **Farm Identifiers**:
+   - **company_farm** / **Company_farm**: Farm identification code - fixed property, not caused by outcomes
+
+4. **Herd Size**:
+   - **avg.sows** / **Avg.sows**: Average number of sows in the farm - management decision, not caused by reproductive outcomes
+
+#### Constraint Rules:
+✅ **Allowed**: `f_light_hr → losses.born.alive` (light affects reproductive outcomes)  
+✅ **Allowed**: `Year → prev_PBA` (temporal effects on reproduction)  
+✅ **Allowed**: `company_farm → losses.born.alive` (farm-specific effects)  
+❌ **Blocked**: `prev_PBA → f_light_hr` (reproductive outcomes cannot cause light hours)  
+❌ **Blocked**: `losses.born.alive → Year` (outcomes cannot cause time)  
+❌ **Blocked**: `Prev_PBD.cat → company_farm` (mortality cannot cause farm identity)  
+❌ **Blocked**: `prev_PBA → avg.sows` (litter size cannot cause herd size)
+
+#### Why This Matters:
+
+Without domain constraints, the algorithm might infer reverse causality due to:
+1. **Seasonal confounding**: Season affects both light hours and reproductive performance
+2. **Spurious correlations**: Variables correlated through a common cause may appear causally related
+3. **Lack of domain knowledge**: The algorithm doesn't know logical/biological plausibility
+
+**Example of problematic inference (without constraints)**:
+```
+Analysis shows: prev_PBA → f_light_hr
+Interpretation: "Previous piglets born alive causes light hours"
+Problem: Logically impossible! Light hours are environmental.
+Actual explanation: Both are affected by season (a confounder).
+```
+
+**Corrected inference (with constraints)**:
+```
+Analysis shows: f_light_hr → losses.born.alive
+Interpretation: "Light hours (photoperiod) affects lactation losses"
+Biological basis: Photoperiod affects hormonal regulation and maternal behavior.
+```
+
+### Temporal Ordering Constraints
+
+**Important**: Variables measured at different time points in the reproductive cycle must respect temporal ordering. Future events **cannot cause** past events.
+
+The analysis automatically applies **temporal ordering constraints** to prevent violations of causality:
+
+#### Temporal Sequence in Reproductive Cycle:
+
+1. **Birth Event** (earliest):
+   - **prev_PBA** / **Prev_PBA**: Previous piglets born alive
+   - **prev_PBD.cat** / **Prev_PBD.cat**: Previous piglets born dead (categorical)
+
+2. **Lactation Period**:
+   - **prev_sowlactpd** / **Prev_sowlactpd**: Previous sow lactation period duration
+
+3. **Weaning Event** (latest):
+   - **previous_weaned** / **Previous_weaned**: Previous weaned piglets
+
+#### Temporal Ordering Rules:
+
+Since weaning happens **AFTER** birth and **AFTER** the lactation period:
+
+✅ **Allowed**: `prev_PBA → previous_weaned` (birth count can affect weaning success)  
+✅ **Allowed**: `Prev_PBD.cat → previous_weaned` (stillbirths can affect weaning outcomes)  
+✅ **Allowed**: `prev_sowlactpd → previous_weaned` (lactation duration can affect weaning)  
+
+❌ **Blocked**: `previous_weaned → prev_PBA` (weaning cannot cause birth count)  
+❌ **Blocked**: `previous_weaned → Prev_PBD.cat` (weaning cannot cause stillbirths)  
+❌ **Blocked**: `previous_weaned → prev_sowlactpd` (weaning cannot cause lactation duration)
+
+#### Why Temporal Ordering Matters:
+
+**Example of temporal violation (without constraints)**:
+```
+Analysis shows: previous_weaned → prev_PBA
+Interpretation: "Number weaned affects number born alive"
+Problem: Temporally impossible! Weaning happens AFTER birth.
+Actual explanation: Both are correlated through other factors.
+```
+
+**Corrected inference (with temporal constraints)**:
+```
+Analysis shows: prev_PBA → previous_weaned
+Interpretation: "Number born alive affects number weaned"
+Biological basis: More piglets born increases potential for more to be weaned.
+```
+
+### How Constraints Are Implemented
+
+The script automatically:
+1. Identifies exogenous variables (environmental, temporal, farm identifiers, herd size)
+2. Creates a blacklist preventing any variable → exogenous variable
+3. Applies temporal ordering constraints to prevent future → past relationships
+4. Combines all constraints and applies to both structure learning and bootstrap analysis
+5. Ensures only logically/biologically plausible causal directions are inferred
+
+For technical details, see the comments in `causal_analysis.R` starting at the "DOMAIN KNOWLEDGE CONSTRAINTS" and "TEMPORAL ORDERING CONSTRAINTS" sections.
 
 ## Interpretation Guide
 

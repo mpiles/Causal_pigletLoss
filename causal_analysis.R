@@ -423,8 +423,148 @@ if (has_continuous && has_discrete) {
   selected_score <- "bic"
 }
 
-# Learn the structure using hill-climbing with selected score
-bn_structure <- hc(bnlearn_data, score = selected_score)
+# ============================================================================
+# DOMAIN KNOWLEDGE CONSTRAINTS
+# ============================================================================
+# EXOGENOUS variables should NOT be caused by other variables. These include:
+# 1. Environmental variables: Light hours determined by season/latitude/policy
+# 2. Temporal variables: Year, Seasons, yearseason (time cannot be caused)
+# 3. Farm identifiers: company_farm, Company_farm (farm ID is fixed)
+# 4. Farm size: avg.sows (herd size is a management decision, not an outcome)
+# 
+# We use a BLACKLIST to prevent incorrect causal directions where 
+# reproductive outcomes would cause exogenous variables.
+# 
+# Biological/logical rationale:
+# - Light hours: determined by season/latitude/farm lighting policy
+# - Temporal variables: time cannot be caused by biological outcomes
+# - Farm identifiers: farm identity is fixed, not caused by outcomes
+# - Herd size: management decision, not caused by reproductive outcomes
+# - All these can AFFECT reproductive outcomes but CANNOT be effects themselves
+# ============================================================================
+
+# Identify exogenous variables (case-insensitive matching)
+# These are variables that are determined externally and cannot be caused by
+# reproductive or outcome variables
+exogenous_var_patterns <- c(
+  "f_light_hr", "F_light_hr",           # Light hours at farrowing
+  "ai_light_hr", "AI_light_hr",         # Light hours at AI
+  "avg.sows", "Avg.sows",               # Farm size (herd size)
+  "company_farm", "Company_farm",       # Farm identifier
+  "yearseason", "YearSeason",           # Year-season combination
+  "year", "Year",                       # Year (temporal)
+  "seasons", "Seasons", "Season"        # Season (temporal)
+)
+
+# Find which exogenous variables are actually present in the data
+exogenous_vars <- intersect(exogenous_var_patterns, names(bnlearn_data))
+
+# Create blacklist: prevent any variable from causing exogenous variables
+blacklist_edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
+
+if (length(exogenous_vars) > 0) {
+  cat("\n*** Applying Domain Knowledge Constraints ***\n")
+  cat("Exogenous variables identified:", paste(exogenous_vars, collapse = ", "), "\n")
+  cat("These variables can only be CAUSES, not EFFECTS (based on domain knowledge)\n\n")
+  
+  # For each exogenous variable, blacklist all incoming edges
+  for (exog_var in exogenous_vars) {
+    # Get all other variables (potential sources)
+    other_vars <- setdiff(names(bnlearn_data), exog_var)
+    
+    # Create blacklist entries: no other variable can cause this exogenous variable
+    for (other_var in other_vars) {
+      blacklist_edges <- rbind(
+        blacklist_edges,
+        data.frame(from = other_var, to = exog_var, stringsAsFactors = FALSE)
+      )
+    }
+  }
+  
+  cat("Blacklisted", nrow(blacklist_edges), "edges to prevent exogenous variables from being effects\n")
+  cat("Categories of exogenous variables:\n")
+  cat("  - Environmental: f_light_hr, AI_light_hr (photoperiod determined by season)\n")
+  cat("  - Temporal: Year, Seasons, yearseason (time cannot be caused)\n")
+  cat("  - Farm identity: company_farm (farm ID is fixed)\n")
+  cat("  - Herd size: avg.sows (management decision, not outcome)\n\n")
+  cat("Examples of blacklisted relationships:\n")
+  cat("  - prev_PBA -> f_light_hr (BLOCKED: reproductive variable cannot cause light hours)\n")
+  cat("  - losses.born.alive -> Year (BLOCKED: outcome cannot cause temporal variable)\n")
+  cat("  - Prev_PBD.cat -> company_farm (BLOCKED: mortality cannot cause farm identity)\n\n")
+}
+
+# ============================================================================
+# TEMPORAL ORDERING CONSTRAINTS
+# ============================================================================
+# Variables measured at different time points in the reproductive cycle must
+# respect temporal ordering: earlier events can cause later events, but not
+# vice versa.
+#
+# Temporal sequence in a reproductive cycle:
+# 1. Birth events: prev_PBA (piglets born alive), Prev_PBD.cat (piglets born dead)
+# 2. Lactation period: prev_sowlactpd (duration of lactation)
+# 3. Weaning event: previous_weaned (piglets successfully weaned at end of lactation)
+#
+# Therefore: previous_weaned CANNOT cause prev_PBA, Prev_PBD.cat, or prev_sowlactpd
+# (weaning happens AFTER birth and AFTER lactation period)
+# ============================================================================
+
+cat("\n*** Applying Temporal Ordering Constraints ***\n")
+
+# Define temporal ordering: later variables cannot cause earlier variables
+# Format: list of (later_var, earlier_vars) pairs
+temporal_constraints <- list(
+  # previous_weaned happens AFTER birth and lactation, so it cannot cause them
+  list(
+    later = c("previous_weaned", "Previous_weaned"),  # Case variations
+    earlier = c("prev_PBA", "Prev_PBA",               # Piglets born alive (at birth)
+                "prev_PBD.cat", "Prev_PBD.cat",       # Piglets born dead (at birth)
+                "prev_sowlactpd", "Prev_sowlactpd")   # Lactation period duration
+  )
+)
+
+# Apply temporal ordering constraints to blacklist
+temporal_edges_count <- 0
+for (constraint in temporal_constraints) {
+  # Find which later and earlier variables actually exist in the data
+  later_vars_present <- intersect(constraint$later, names(bnlearn_data))
+  earlier_vars_present <- intersect(constraint$earlier, names(bnlearn_data))
+  
+  if (length(later_vars_present) > 0 && length(earlier_vars_present) > 0) {
+    cat("Temporal constraint: Variables at later timepoint cannot cause earlier variables\n")
+    cat("  Later (cannot be causes of earlier):", paste(later_vars_present, collapse = ", "), "\n")
+    cat("  Earlier (can cause later):", paste(earlier_vars_present, collapse = ", "), "\n\n")
+    
+    # Block: later_var -> earlier_var (future cannot cause past)
+    for (later_var in later_vars_present) {
+      for (earlier_var in earlier_vars_present) {
+        blacklist_edges <- rbind(
+          blacklist_edges,
+          data.frame(from = later_var, to = earlier_var, stringsAsFactors = FALSE)
+        )
+        temporal_edges_count <- temporal_edges_count + 1
+      }
+    }
+  }
+}
+
+if (temporal_edges_count > 0) {
+  cat("Blacklisted", temporal_edges_count, "edges to enforce temporal ordering\n")
+  cat("Examples of temporally impossible relationships blocked:\n")
+  cat("  - previous_weaned -> prev_PBA (BLOCKED: weaning cannot cause birth count)\n")
+  cat("  - previous_weaned -> Prev_PBD.cat (BLOCKED: weaning cannot cause stillbirth count)\n")
+  cat("  - previous_weaned -> prev_sowlactpd (BLOCKED: weaning cannot cause lactation duration)\n\n")
+}
+
+# Learn the structure using hill-climbing with selected score and domain constraints
+if (nrow(blacklist_edges) > 0) {
+  bn_structure <- hc(bnlearn_data, score = selected_score, blacklist = blacklist_edges)
+  cat("Structure learning completed with domain knowledge and temporal ordering constraints applied.\n")
+  cat("Total blacklisted edges:", nrow(blacklist_edges), "\n\n")
+} else {
+  bn_structure <- hc(bnlearn_data, score = selected_score)
+  cat("Structure learning completed without constraints.\n\n")
+}
 
 cat("\n=== Bayesian Network Structure ===\n")
 print(bn_structure)
@@ -565,8 +705,16 @@ cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n"
 
 # Use the same score as determined earlier for consistency
 cat("Using", selected_score, "score for bootstrap analysis\n")
-boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                               algorithm.args = list(score = selected_score))
+
+# Apply the same domain knowledge and temporal ordering constraints (blacklist) to bootstrap
+if (nrow(blacklist_edges) > 0) {
+  cat("Applying domain knowledge and temporal ordering constraints to bootstrap analysis\n")
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = selected_score, blacklist = blacklist_edges))
+} else {
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = selected_score))
+}
 
 # Filter strong arcs (strength > 0.5, direction > 0.5)
 strong_arcs <- boot_strength[boot_strength$strength > 0.5 & boot_strength$direction > 0.5, ]

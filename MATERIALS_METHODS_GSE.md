@@ -89,6 +89,35 @@ where $L(\theta \mid D)$ is the model likelihood given parameters $\theta$ and d
 **Hill-climbing algorithm**  
 The hill-climbing procedure searches the space of directed acyclic graphs by iteratively evaluating three operations: adding an edge, removing an edge, or reversing an edge direction. At each step, the operation yielding the greatest improvement in BIC score is selected, subject to the constraint that no directed cycles are created. The algorithm terminates when no operation improves the score, indicating a local optimum has been reached.
 
+### Domain Knowledge and Temporal Ordering Constraints
+
+To ensure biologically and logically plausible causal inferences, domain knowledge constraints were incorporated into the structure learning process using blacklists [11]. These constraints prevent the algorithm from inferring causally impossible relationships.
+
+**Exogenous variable constraints**  
+Certain variables were classified as exogenous—determined by external factors and therefore incapable of being caused by reproductive outcomes. Four categories of exogenous variables were identified:
+
+1. *Environmental variables*: Photoperiod (F_light_hr, AI_light_hr) is determined by season, latitude, and farm lighting policy, not by reproductive outcomes.
+
+2. *Temporal variables*: Calendar year (Year) and season (Seasons) represent the passage of time, which cannot be caused by biological events.
+
+3. *Farm identifiers*: Farm identity (Company_farm) is a fixed property, not an outcome of reproductive performance.
+
+4. *Herd size*: Average sow numbers (avg.sows) reflects management decisions rather than consequences of individual litter outcomes.
+
+For all exogenous variables $V_{\text{exog}}$, edges of the form $X \rightarrow V_{\text{exog}}$ were prohibited for any non-exogenous variable $X$. This ensures that exogenous variables may only appear as causes (parents) in the learned DAG, never as effects (children).
+
+**Temporal ordering constraints**  
+Variables measured at different time points within the reproductive cycle were constrained to respect temporal causality. Events occurring later in time cannot cause events that occurred earlier. The temporal sequence was defined as:
+
+1. Birth events (t₁): prev_PBA, Prev_PBD.cat (litter size and stillbirths)
+2. Lactation period (t₂): prev_sowlactpd (lactation duration)  
+3. Weaning event (t₃): previous_weaned (number weaned)
+
+For variables $V_{\text{late}}$ occurring at a later time point and $V_{\text{early}}$ at an earlier time point, edges $V_{\text{late}} \rightarrow V_{\text{early}}$ were blacklisted. This constraint prevents temporally impossible relationships such as weaning outcomes causing birth outcomes, whilst permitting the biologically plausible reverse direction.
+
+**Implementation**  
+Both exogenous variable and temporal ordering constraints were encoded as blacklists—sets of forbidden edges—and applied to both the hill-climbing structure learning and bootstrap resampling procedures. The combined blacklist ensures that the learned DAG respects both domain knowledge and temporal causality.
+
 ### Bootstrap Assessment of Relationship Strength
 
 To evaluate the stability and reliability of identified causal relationships, we performed non-parametric bootstrap resampling with 200 iterations [7]. For each bootstrap sample, the complete structure learning procedure was repeated, and the frequency of each directed edge was recorded.
@@ -164,6 +193,8 @@ All data were collected as part of routine commercial farm management. No experi
 9. Hansen KD, Gentry J, Long L, Gentleman R, Falcon S, Hahne F, Sarkar D (2023) Rgraphviz: Provides plotting capabilities for R graph objects. R package version 2.44.0
 
 10. Wickham H, François R, Henry L, Müller K, Vaughan D (2023) dplyr: A grammar of data manipulation. R package version 1.1.4. https://CRAN.R-project.org/package=dplyr
+
+11. Scutari M, Denis J-B (2014) Bayesian Networks: With Examples in R. CRC Press, Boca Raton
 
 ---
 
