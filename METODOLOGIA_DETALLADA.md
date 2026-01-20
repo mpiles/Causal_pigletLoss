@@ -592,6 +592,67 @@ bn_structure <- hc(data, score = "bic-cg", blacklist = blacklist)
 
 **Resultado**: El DAG final respeta las restricciones biológicas y solo incluye relaciones causales plausibles.
 
+#### 6.3.5. Restricciones de Ordenamiento Temporal
+
+**Problema de Violaciones Temporales**:
+
+Además de las variables exógenas, es necesario respetar el **ordenamiento temporal** de eventos en el ciclo reproductivo. Los eventos futuros **NO pueden causar** eventos pasados.
+
+**Secuencia Temporal en el Ciclo Reproductivo**:
+
+1. **Nacimiento** (T1 - primero):
+   - `prev_PBA`, `Prev_PBA`: Lechones nacidos vivos en el parto anterior
+   - `prev_PBD.cat`, `Prev_PBD.cat`: Lechones nacidos muertos (categórica)
+
+2. **Lactación** (T2):
+   - `prev_sowlactpd`, `Prev_sowlactpd`: Duración del período de lactación
+
+3. **Destete** (T3 - último):
+   - `previous_weaned`, `Previous_weaned`: Lechones destetados al final de la lactación
+
+**Restricciones Temporales Implementadas**:
+
+Dado que el destete ocurre **DESPUÉS** del nacimiento y la lactación, se bloquean las siguientes relaciones:
+
+```r
+# Lista negra para ordenamiento temporal
+# previous_weaned (T3) NO puede causar eventos anteriores (T1, T2)
+temporal_constraints <- list(
+  list(
+    later = c("previous_weaned", "Previous_weaned"),  # Evento posterior
+    earlier = c("prev_PBA", "Prev_PBA",               # Eventos anteriores (nacimiento)
+                "prev_PBD.cat", "Prev_PBD.cat",       
+                "prev_sowlactpd", "Prev_sowlactpd")   # (lactación)
+  )
+)
+
+# Bloquear: evento_posterior → evento_anterior
+for (later_var in later_vars) {
+  for (earlier_var in earlier_vars) {
+    blacklist <- rbind(blacklist,
+                       data.frame(from = later_var, to = earlier_var))
+  }
+}
+```
+
+**Relaciones Bloqueadas** (temporalmente imposibles):
+
+❌ `previous_weaned → prev_PBA` (destete no puede causar número de nacidos)  
+❌ `previous_weaned → Prev_PBD.cat` (destete no puede causar mortinatos)  
+❌ `previous_weaned → prev_sowlactpd` (destete no puede causar duración de lactación)
+
+**Relaciones Permitidas** (orden temporal correcto):
+
+✅ `prev_PBA → previous_weaned` (nacidos vivos puede afectar destetados)  
+✅ `Prev_PBD.cat → previous_weaned` (mortinatos puede afectar destetados)  
+✅ `prev_sowlactpd → previous_weaned` (duración lactación puede afectar destetados)
+
+**Justificación**:
+
+- El principio de causalidad establece que las causas preceden a los efectos en el tiempo
+- Un evento en T3 (destete) no puede causar un evento en T1 (nacimiento) o T2 (lactación)
+- Las restricciones temporales garantizan que el DAG respeta la secuencia cronológica de eventos
+
 ### 6.4. Consideraciones Prácticas
 
 - Los resultados deben interpretarse junto con conocimiento experto del dominio

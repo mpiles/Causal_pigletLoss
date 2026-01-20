@@ -565,7 +565,6 @@ if (nrow(blacklist_edges) > 0) {
   bn_structure <- hc(bnlearn_data, score = selected_score)
   cat("Structure learning completed without constraints.\n\n")
 }
-}
 
 cat("\n=== Bayesian Network Structure ===\n")
 print(bn_structure)
