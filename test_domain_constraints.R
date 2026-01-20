@@ -8,6 +8,18 @@
 #   Rscript test_domain_constraints.R
 ################################################################################
 
+# Test data parameters (defined as constants for clarity)
+SAMPLE_SIZE <- 1000
+MEAN_LIGHT_HOURS_FARROWING <- 14
+SD_LIGHT_HOURS_FARROWING <- 2
+MEAN_LIGHT_HOURS_AI <- 13
+SD_LIGHT_HOURS_AI <- 2
+MEAN_PIGLETS_BORN_ALIVE <- 12
+MEAN_HERD_SIZE <- 500
+SD_HERD_SIZE <- 50
+MEAN_LOSSES <- 0.1
+SD_LOSSES <- 0.05
+
 cat("Testing Domain Knowledge Constraints for Environmental Variables\n")
 cat("=================================================================\n\n")
 
@@ -18,20 +30,20 @@ if (!require("bnlearn", quietly = TRUE)) {
 
 # Create simple test data
 set.seed(123)
-n <- 1000
+n <- SAMPLE_SIZE
 
 test_data <- data.frame(
   # Environmental variable (should only be a cause)
-  F_light_hr = rnorm(n, mean = 14, sd = 2),
-  AI_light_hr = rnorm(n, mean = 13, sd = 2),
+  F_light_hr = rnorm(n, mean = MEAN_LIGHT_HOURS_FARROWING, sd = SD_LIGHT_HOURS_FARROWING),
+  AI_light_hr = rnorm(n, mean = MEAN_LIGHT_HOURS_AI, sd = SD_LIGHT_HOURS_AI),
   
   # Reproductive variables
-  prev_PBA = rpois(n, lambda = 12),
-  avg.sows = rnorm(n, mean = 500, sd = 50),
+  prev_PBA = rpois(n, lambda = MEAN_PIGLETS_BORN_ALIVE),
+  avg.sows = rnorm(n, mean = MEAN_HERD_SIZE, sd = SD_HERD_SIZE),
   Prev_PBD.cat = factor(sample(c("Low", "Medium", "High"), n, replace = TRUE)),
   
   # Outcome variable
-  losses.born.alive = rnorm(n, mean = 0.1, sd = 0.05)
+  losses.born.alive = rnorm(n, mean = MEAN_LOSSES, sd = SD_LOSSES)
 )
 
 # Add correlation between season and environmental variables (confounding)

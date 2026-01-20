@@ -69,7 +69,7 @@ if ("AI_light_hr" %in% names(bnlearn_data)) {
 }
 
 # Crear lista negra
-blacklist_edges <- data.frame(from = character(), to = character())
+blacklist_edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
 
 for (env_var in environmental_vars) {
   other_vars <- setdiff(names(bnlearn_data), env_var)

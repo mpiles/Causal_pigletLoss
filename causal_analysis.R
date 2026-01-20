@@ -440,13 +440,9 @@ if (has_continuous && has_discrete) {
 # ============================================================================
 
 # Identify environmental variables
-environmental_vars <- c()
-if ("F_light_hr" %in% names(bnlearn_data)) {
-  environmental_vars <- c(environmental_vars, "F_light_hr")
-}
-if ("AI_light_hr" %in% names(bnlearn_data)) {
-  environmental_vars <- c(environmental_vars, "AI_light_hr")
-}
+# These are variables determined by external factors (season, latitude, farm policy)
+# and cannot be caused by reproductive or management variables
+environmental_vars <- intersect(c("F_light_hr", "AI_light_hr"), names(bnlearn_data))
 
 # Create blacklist: prevent any variable from causing environmental variables
 blacklist_edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
