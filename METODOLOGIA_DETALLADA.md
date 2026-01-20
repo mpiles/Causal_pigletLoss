@@ -100,7 +100,7 @@ El algoritmo PC es un método de descubrimiento causal basado en pruebas de inde
 
 $$P(X, Y | Z) = P(X | Z) \cdot P(Y | Z)$$
 
-Notación: $X \perp\!\!\!\perp Y \mid Z$
+Notación: $X \perp\!\!\perp Y \mid Z$
 
 **Test de Independencia Gaussiana**: Para variables continuas con distribución normal, utilizamos la correlación parcial:
 
@@ -120,7 +120,7 @@ donde $n$ es el tamaño muestral y $|Z|$ es el tamaño del conjunto de condicion
 **Paso 2: Eliminación de Aristas (Skeleton)**
 - Para cada par de nodos adyacentes $(X, Y)$:
   - Para cada subconjunto $Z \subseteq \text{adj}(X) \setminus \{Y\}$:
-    - Si $X \perp\!\!\!\perp Y \mid Z$ (con nivel de significancia $\alpha = 0.05$):
+    - Si $X \perp\!\!\perp Y \mid Z$ (con nivel de significancia $\alpha = 0.05$):
       - Eliminar arista entre $X$ y $Y$
       - Guardar $Z$ como conjunto separador
 
@@ -171,7 +171,7 @@ $$P(X_1, X_2, ..., X_n) = \prod_{i=1}^{n} P(X_i | \text{Pa}(X_i))$$
 
 Esta factorización implica las **independencias condicionales** de Markov:
 - Cada variable es independiente de sus no-descendientes dado sus padres
-- Matemáticamente: $X_i \perp\!\!\!\perp \text{NonDesc}(X_i) \mid \text{Pa}(X_i)$
+- Matemáticamente: $X_i \perp\!\!\perp \text{NonDesc}(X_i) \mid \text{Pa}(X_i)$
 
 #### 3.2.3. Criterio de Información Bayesiano (BIC)
 
@@ -288,8 +288,8 @@ Validar hipótesis específicas sobre independencias condicionales entre variabl
 #### 3.4.2. Test de Correlación para Variables Continuas
 
 **Hipótesis**:
-- $H_0$: $X \perp\!\!\!\perp Y \mid Z$ (independencia condicional)
-- $H_1$: $X \not\!\perp\!\!\!\perp Y \mid Z$ (dependencia condicional)
+- $H_0$: $X \perp\!\!\perp Y \mid Z$ (independencia condicional)
+- $H_1$: $X \not\perp Y \mid Z$ (dependencia condicional)
 
 **Estadístico**: Correlación parcial
 
@@ -412,7 +412,7 @@ Visualización: causal_dag_target_focused.pdf
 
 **Relación indirecta**: $X \rightarrow Z \rightarrow Y$ implica que $X$ afecta a $Y$ a través del mediador $Z$
 
-**Independencia condicional**: Ausencia de arista entre $X$ e $Y$ implica $X \perp\!\!\!\perp Y \mid \text{resto de variables}$
+**Independencia condicional**: Ausencia de arista entre $X$ e $Y$ implica $X \perp\!\!\perp Y \mid \text{resto de variables}$
 
 ### 5.2. Métricas de Confianza (Bootstrap)
 
@@ -638,7 +638,7 @@ BiocManager::install(c("pcalg", "graph", "Rgraphviz"))
 
 - **d-separación**: Criterio gráfico para determinar independencia condicional en DAGs
 
-- **Independencia condicional**: $X \perp\!\!\!\perp Y \mid Z$ significa que $X$ e $Y$ son independientes dado $Z$
+- **Independencia condicional**: $X \perp\!\!\perp Y \mid Z$ significa que $X$ e $Y$ son independientes dado $Z$
 
 - **Bootstrap**: Técnica de remuestreo con reemplazo para evaluar variabilidad y estabilidad de estimadores
 
