@@ -100,11 +100,63 @@ The script will generate several output files:
   - **bic** (Discrete): For discrete-only variables
 - Learns directed acyclic graph (DAG) structure
 - Handles mixed data types seamlessly
+- **Domain knowledge constraints**: Applies biological constraints to prevent impossible causal directions (see section below)
 
 ### 3. Bootstrap Analysis
 - Assesses reliability of identified relationships
 - 200 bootstrap samples
 - Provides strength and direction scores for each arc
+- Uses the same domain knowledge constraints as structure learning
+
+## Domain Knowledge Constraints
+
+### Environmental Variables Cannot Be Effects
+
+**Important**: Environmental variables (photoperiod/light hours) are determined by external factors like season, latitude, and farm lighting policies. They **cannot be caused** by reproductive or management variables.
+
+The analysis automatically applies **blacklist constraints** to prevent biologically impossible causal directions:
+
+#### Variables Classified as Environmental:
+- **F_light_hr**: Light hours at farrowing - determined by season and farm lighting policy
+- **AI_light_hr**: Light hours at artificial insemination - determined by season and farm lighting policy
+
+#### Constraint Rules:
+✅ **Allowed**: `F_light_hr → losses.born.alive` (light affects reproductive outcomes)  
+❌ **Blocked**: `prev_PBA → F_light_hr` (reproductive outcomes cannot cause light hours)  
+❌ **Blocked**: `avg.sows → F_light_hr` (herd size cannot cause light hours)  
+❌ **Blocked**: `Prev_PBD.cat → F_light_hr` (mortality cannot cause light hours)
+
+#### Why This Matters:
+
+Without domain constraints, the algorithm might infer reverse causality due to:
+1. **Seasonal confounding**: Season affects both light hours and reproductive performance
+2. **Spurious correlations**: Variables correlated through a common cause (season) may appear causally related
+3. **Lack of domain knowledge**: The algorithm doesn't know biological plausibility
+
+**Example of problematic inference (without constraints)**:
+```
+Analysis shows: prev_PBA → F_light_hr
+Interpretation: "Previous piglets born alive causes light hours"
+Problem: Biologically impossible! Light hours are environmental.
+Actual explanation: Both are affected by season (a confounder).
+```
+
+**Corrected inference (with constraints)**:
+```
+Analysis shows: F_light_hr → losses.born.alive
+Interpretation: "Light hours (photoperiod) affects lactation losses"
+Biological basis: Photoperiod affects hormonal regulation and maternal behavior.
+```
+
+### How Constraints Are Implemented
+
+The script automatically:
+1. Identifies environmental variables (`F_light_hr`, `AI_light_hr`)
+2. Creates a blacklist preventing any variable → environmental variable
+3. Applies blacklist to both structure learning and bootstrap analysis
+4. Ensures only biologically plausible causal directions are inferred
+
+For technical details, see the comments in `causal_analysis.R` starting at the "DOMAIN KNOWLEDGE CONSTRAINTS" section.
 
 ## Interpretation Guide
 

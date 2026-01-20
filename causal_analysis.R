@@ -423,8 +423,68 @@ if (has_continuous && has_discrete) {
   selected_score <- "bic"
 }
 
-# Learn the structure using hill-climbing with selected score
-bn_structure <- hc(bnlearn_data, score = selected_score)
+# ============================================================================
+# DOMAIN KNOWLEDGE CONSTRAINTS
+# ============================================================================
+# Environmental variables (F_light_hr, AI_light_hr) should NOT be caused by
+# other variables. They are determined by external environmental/seasonal 
+# factors, not by pig reproductive variables.
+# 
+# We use a BLACKLIST to prevent incorrect causal directions where 
+# reproductive/management variables would cause environmental variables.
+# 
+# Biological rationale:
+# - Light hours are determined by season/latitude/farm lighting policy
+# - Light hours can AFFECT reproductive outcomes (photoperiod effects)
+# - Light hours CANNOT be caused by reproductive outcomes
+# ============================================================================
+
+# Identify environmental variables
+environmental_vars <- c()
+if ("F_light_hr" %in% names(bnlearn_data)) {
+  environmental_vars <- c(environmental_vars, "F_light_hr")
+}
+if ("AI_light_hr" %in% names(bnlearn_data)) {
+  environmental_vars <- c(environmental_vars, "AI_light_hr")
+}
+
+# Create blacklist: prevent any variable from causing environmental variables
+blacklist_edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
+
+if (length(environmental_vars) > 0) {
+  cat("\n*** Applying Domain Knowledge Constraints ***\n")
+  cat("Environmental variables identified:", paste(environmental_vars, collapse = ", "), "\n")
+  cat("These variables can only be CAUSES, not EFFECTS (based on biological knowledge)\n\n")
+  
+  # For each environmental variable, blacklist all incoming edges
+  for (env_var in environmental_vars) {
+    # Get all other variables (potential sources)
+    other_vars <- setdiff(names(bnlearn_data), env_var)
+    
+    # Create blacklist entries: no other variable can cause this environmental variable
+    for (other_var in other_vars) {
+      blacklist_edges <- rbind(
+        blacklist_edges,
+        data.frame(from = other_var, to = env_var, stringsAsFactors = FALSE)
+      )
+    }
+  }
+  
+  cat("Blacklisted", nrow(blacklist_edges), "edges to prevent environmental variables from being effects\n")
+  cat("Examples of blacklisted relationships:\n")
+  cat("  - prev_PBA -> F_light_hr (BLOCKED: reproductive variable cannot cause light hours)\n")
+  cat("  - avg.sows -> F_light_hr (BLOCKED: herd size cannot cause light hours)\n")
+  cat("  - Prev_PBD.cat -> F_light_hr (BLOCKED: mortality cannot cause light hours)\n\n")
+}
+
+# Learn the structure using hill-climbing with selected score and domain constraints
+if (length(environmental_vars) > 0 && nrow(blacklist_edges) > 0) {
+  bn_structure <- hc(bnlearn_data, score = selected_score, blacklist = blacklist_edges)
+  cat("Structure learning completed with domain knowledge constraints applied.\n")
+} else {
+  bn_structure <- hc(bnlearn_data, score = selected_score)
+  cat("Structure learning completed without domain constraints (no environmental variables found).\n")
+}
 
 cat("\n=== Bayesian Network Structure ===\n")
 print(bn_structure)
@@ -565,8 +625,16 @@ cat("\nPerforming bootstrap to assess arc strength (this may take a while)...\n"
 
 # Use the same score as determined earlier for consistency
 cat("Using", selected_score, "score for bootstrap analysis\n")
-boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
-                               algorithm.args = list(score = selected_score))
+
+# Apply the same domain knowledge constraints (blacklist) to bootstrap
+if (length(environmental_vars) > 0 && nrow(blacklist_edges) > 0) {
+  cat("Applying domain knowledge constraints to bootstrap analysis\n")
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = selected_score, blacklist = blacklist_edges))
+} else {
+  boot_strength <- boot.strength(bnlearn_data, R = 200, algorithm = "hc", 
+                                 algorithm.args = list(score = selected_score))
+}
 
 # Filter strong arcs (strength > 0.5, direction > 0.5)
 strong_arcs <- boot_strength[boot_strength$strength > 0.5 & boot_strength$direction > 0.5, ]
